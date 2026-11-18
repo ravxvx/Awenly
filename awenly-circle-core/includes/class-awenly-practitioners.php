@@ -6,6 +6,7 @@ class Awenly_Practitioners {
         add_action('save_post_awenly_practitioner',[$this,'save_meta']);
         add_shortcode('awenly_practitioner_directory',[$this,'directory_shortcode']);
         add_shortcode('awenly_practitioner_profile',[$this,'profile_shortcode']);
+        add_filter('the_content',[$this,'append_details'],20);
     }
     public function register_types() {
         register_post_type('awenly_practitioner',['labels'=>['name'=>'Practitioners','singular_name'=>'Practitioner','add_new_item'=>'Add Practitioner','edit_item'=>'Edit Practitioner'],'public'=>true,'has_archive'=>true,'rewrite'=>['slug'=>'practitioners'],'menu_icon'=>'dashicons-id','supports'=>['title','editor','thumbnail','excerpt'],'show_in_rest'=>true]);
@@ -41,7 +42,22 @@ class Awenly_Practitioners {
         if(!is_singular('awenly_practitioner')) return ''; $id=get_the_ID(); $booking=get_post_meta($id,'_awenly_booking_url',true);
         $items=['Session price'=>'fee','Format'=>'mode','Location'=>'location','Qualifications'=>'qualifications']; ob_start(); ?><section class="awenly-profile">
         <?php if(has_post_thumbnail()) echo get_the_post_thumbnail($id,'large',['class'=>'awenly-profile-photo']); ?><div><small>AWENLY CIRCLE PRACTITIONER</small><h1><?php echo esc_html(get_the_title($id)); ?></h1>
-        <div class="awenly-profile-copy"><?php echo apply_filters('the_content',get_post_field('post_content',$id)); ?></div><dl><?php foreach($items as $label=>$key): $v=get_post_meta($id,'_awenly_'.$key,true); if($v) echo '<div><dt>'.esc_html($label).'</dt><dd>'.esc_html($v).'</dd></div>'; endforeach; ?></dl>
+        <div class="awenly-profile-copy"><?php echo wpautop(wp_kses_post(strip_shortcodes(get_post_field('post_content',$id)))); ?></div><dl><?php foreach($items as $label=>$key): $v=get_post_meta($id,'_awenly_'.$key,true); if($v) echo '<div><dt>'.esc_html($label).'</dt><dd>'.esc_html($v).'</dd></div>'; endforeach; ?></dl>
         <?php if($booking) echo '<a class="awenly-btn" href="'.esc_url($booking).'" target="_blank" rel="noopener noreferrer">Book a session</a>'; ?></div></section><?php return ob_get_clean();
+    }
+    /** Show price, format, location, qualifications and the booking button under the content of a single practitioner. */
+    public function append_details($content) {
+        static $running = false;
+        if ($running || !is_singular('awenly_practitioner') || !in_the_loop() || !is_main_query()) return $content;
+        if (has_shortcode(get_post_field('post_content', get_the_ID()), 'awenly_practitioner_profile')) return $content;
+        $running = true;
+        $id = get_the_ID(); $booking = get_post_meta($id, '_awenly_booking_url', true);
+        $items = ['Session price'=>'fee','Format'=>'mode','Location'=>'location','Qualifications'=>'qualifications'];
+        $html = '';
+        foreach ($items as $label => $key) { $v = get_post_meta($id, '_awenly_'.$key, true); if ($v) $html .= '<div><dt>'.esc_html($label).'</dt><dd>'.esc_html($v).'</dd></div>'; }
+        $out = $html ? '<dl class="awenly-details">'.$html.'</dl>' : '';
+        if ($booking) $out .= '<p><a class="awenly-btn" href="'.esc_url($booking).'" target="_blank" rel="noopener noreferrer">Book a session</a></p>';
+        $running = false;
+        return $content . ($out ? '<section class="awenly-practitioner-details">'.$out.'</section>' : '');
     }
 }
