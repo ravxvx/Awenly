@@ -42,3 +42,33 @@ Version 1.0.0 is an initial foundation/MVP, not a complete production platform.
 
 ## Safety
 Back up the WordPress database and files before installing or updating this plugin on a live site.
+
+---
+
+# Repository contents
+
+| Folder | What it is | Live version |
+|---|---|---|
+| `awenly-circle-core/` | Original Core plugin (practitioner + event post types) | 1.0.1 |
+| `awenly-child/` | **Awenly Circle** child theme for BuddyBoss Theme — homepage, header/footer, colours | 3.3.3 |
+| `awenly-directory/` | **Awenly Practitioner Directory** plugin — self-service listings | 1.0.1 |
+| `releases/` | Installable ZIPs | |
+
+## Awenly Circle child theme (`awenly-child`)
+- Requires **BuddyBoss Theme** (parent). Install via Appearance → Themes → Upload (`releases/awenly-child-3.3.3.zip`).
+- Homepage (`front-page.php`): hero with join form, Next Live bar, feature cards, practitioner directory teaser, three steps, upcoming events, CTA.
+- Reads events from **The Events Calendar** when active (falls back to the `awenly_event` post type).
+- Site-wide: Awenly logo, lavender/lime styling, Awenly footer, branded login/register screens.
+- Disables the old BuddyBoss "custom registration" redirect so `/register/` shows the sign-up form.
+- Settings: Appearance → Customize → **Awenly Circle**. Hero/event images in `assets/img/` were generated with Canva.
+
+## Awenly Practitioner Directory (`awenly-directory`)
+- Uses the same `awenly_practitioner` post type and `awenly_specialty` taxonomy as Core (data is shared).
+- **My Practice** tab on BuddyBoss profiles: members create/edit their own free listing.
+- New listings go to **Pending**; admin gets an email, publishes → practitioner gets an email and the BuddyBoss profile type "Practitioner".
+- Directory at `/practitioners/` with keyword, specialisation, city and format filters (`?s_practitioner=slug` supported for homepage chips).
+- Listing page with booking link, BuddyBoss message button and community profile link.
+
+### Roadmap
+- Stage 2: reviews & ratings, "Verified" badge, practitioner's events on their listing.
+- Stage 3 (optional): featured/paid listings, map.
