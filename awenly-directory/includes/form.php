@@ -133,6 +133,8 @@ add_action( 'bp_actions', function () {
 		}
 	}
 
+	do_action( 'awd_listing_saved', $post_id );
+
 	$flag = $listing ? 'saved' : 'submitted';
 	wp_safe_redirect( add_query_arg( 'awd', $flag, $redirect ) );
 	exit;
@@ -161,6 +163,9 @@ function awd_practice_content() {
 		'saved'     => array( 'ok', __( 'Your listing has been saved.', 'awenly-directory' ) ),
 		'missing'   => array( 'err', __( 'Please fill in your practice name and the "About" section.', 'awenly-directory' ) ),
 		'error'     => array( 'err', __( 'Something went wrong. Please try again.', 'awenly-directory' ) ),
+		'event_submitted'     => array( 'ok', __( 'Thank you! Your event was sent for review.', 'awenly-directory' ) ),
+		'event_invalid'       => array( 'err', __( 'Please add a title, a future date and a start time for your event.', 'awenly-directory' ) ),
+		'event_needs_listing' => array( 'err', __( 'Your listing needs to be approved before you can add events.', 'awenly-directory' ) ),
 	);
 	if ( isset( $notices[ $notice ] ) ) {
 		printf( '<div class="awd-notice awd-notice--%s">%s</div>', esc_attr( $notices[ $notice ][0] ), esc_html( $notices[ $notice ][1] ) );
@@ -176,7 +181,9 @@ function awd_practice_content() {
 		$st = $status_map[ $listing->post_status ] ?? $status_map['draft'];
 		echo '<div class="awd-status awd-status--' . esc_attr( $st[0] ) . '"><span>' . esc_html( $st[1] ) . '</span>';
 		if ( 'publish' === $listing->post_status ) {
+			$r = awd_rating( $listing->ID );
 			echo ' <a href="' . esc_url( get_permalink( $listing ) ) . '">' . esc_html__( 'View my listing →', 'awenly-directory' ) . '</a>';
+			echo '<em class="awd-stats">' . esc_html( sprintf( __( '%1$d views · %2$s ★ (%3$d reviews)', 'awenly-directory' ), (int) get_post_meta( $listing->ID, '_awd_views', true ), number_format_i18n( $r['avg'], 1 ), $r['count'] ) ) . ( awd_is_verified( $listing->ID ) ? ' · ' . esc_html__( 'Verified', 'awenly-directory' ) : '' ) . '</em>';
 		}
 		echo '</div>';
 	} else {
@@ -241,5 +248,6 @@ function awd_practice_content() {
 		<button type="submit" class="awd-btn"><?php echo $listing ? esc_html__( 'Save listing', 'awenly-directory' ) : esc_html__( 'Submit for review', 'awenly-directory' ); ?></button>
 	</form>
 	<?php
+	awd_render_event_form( $listing );
 	echo '</div>';
 }

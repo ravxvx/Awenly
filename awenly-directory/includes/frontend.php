@@ -39,6 +39,8 @@ function awd_current_filters() {
 		'specialty' => sanitize_title( wp_unslash( $_GET['specialty'] ?? '' ) ),
 		'mode'      => sanitize_text_field( wp_unslash( $_GET['mode'] ?? '' ) ),
 		'location'  => sanitize_text_field( wp_unslash( $_GET['location'] ?? '' ) ),
+		'verified'  => ! empty( $_GET['verified'] ),
+		'sort'      => in_array( $_GET['sort'] ?? '', array( 'rating', 'new' ), true ) ? sanitize_key( $_GET['sort'] ) : '',
 	);
 	if ( ! empty( $_GET['s_practitioner'] ) ) {
 		$sp = sanitize_title( wp_unslash( $_GET['s_practitioner'] ) );
@@ -57,7 +59,7 @@ function awd_current_filters() {
 	return $f;
 }
 
-function awd_query( $filters, $paged = 1 ) {
+function awd_query( $filters, $paged = 1, $extra = array() ) {
 	$args = array(
 		'post_type'      => AWD_CPT,
 		'post_status'    => 'publish',
@@ -65,6 +67,9 @@ function awd_query( $filters, $paged = 1 ) {
 		'paged'          => max( 1, (int) $paged ),
 		'orderby'        => array( 'menu_order' => 'ASC', 'date' => 'DESC' ),
 	);
+	if ( 'new' === $filters['sort'] ) {
+		$args['orderby'] = array( 'date' => 'DESC' );
+	}
 	if ( $filters['q'] ) {
 		$args['s'] = $filters['q'];
 	}
@@ -79,10 +84,17 @@ function awd_query( $filters, $paged = 1 ) {
 	if ( $filters['location'] ) {
 		$meta[] = array( 'key' => '_awenly_location', 'value' => $filters['location'], 'compare' => 'LIKE' );
 	}
+	if ( ! empty( $filters['verified'] ) ) {
+		$meta[] = array( 'key' => '_awd_verified', 'value' => '1' );
+	}
+	if ( 'rating' === $filters['sort'] ) {
+		$meta['awd_avg'] = array( 'relation' => 'OR', 'awd_avg_set' => array( 'key' => '_awd_rating_avg', 'type' => 'DECIMAL(4,2)' ), array( 'key' => '_awd_rating_avg', 'compare' => 'NOT EXISTS' ) );
+		$args['orderby'] = array( 'awd_avg_set' => 'DESC', 'date' => 'DESC' );
+	}
 	if ( $meta ) {
 		$args['meta_query'] = $meta;
 	}
-	return new WP_Query( $args );
+	return new WP_Query( array_merge( $args, $extra ) );
 }
 
 /**
@@ -96,7 +108,8 @@ function awd_render_card( $post, $wide = false ) {
 	<article class="awd-card<?php echo $wide ? ' awd-card--wide' : ''; ?>">
 		<a class="awd-card__photo" href="<?php echo esc_url( get_permalink( $post ) ); ?>" tabindex="-1" aria-hidden="true"><?php echo awd_photo( $post, 'medium_large' ); // phpcs:ignore ?></a>
 		<div class="awd-card__body">
-			<h3><a href="<?php echo esc_url( get_permalink( $post ) ); ?>"><?php echo esc_html( get_the_title( $post ) ); ?></a></h3>
+			<h3><a href="<?php echo esc_url( get_permalink( $post ) ); ?>"><?php echo esc_html( get_the_title( $post ) ); ?></a><?php echo awd_is_verified( $post->ID ) ? awd_verified_badge( true ) : ''; // phpcs:ignore ?></h3>
+			<?php $rt = awd_rating( $post->ID ); if ( $rt['count'] ) : ?><div class="awd-card__rating"><?php echo awd_stars( $rt['avg'], $rt['count'], true ); // phpcs:ignore ?></div><?php endif; ?>
 			<?php if ( $post->post_excerpt ) : ?><p class="awd-card__tag"><?php echo esc_html( $post->post_excerpt ); ?></p><?php endif; ?>
 			<?php if ( $terms && ! is_wp_error( $terms ) ) : ?>
 				<div class="awd-chips"><?php foreach ( array_slice( $terms, 0, 3 ) as $t ) : ?><span><?php echo esc_html( $t->name ); ?></span><?php endforeach; ?></div>
