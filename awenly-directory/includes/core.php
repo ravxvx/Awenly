@@ -9,17 +9,48 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Listing fields stored as post meta. Keys match Awenly Circle Core so existing data keeps working.
  */
+/**
+ * Listing types. Stored in post meta "_awd_type"; empty = practitioner.
+ */
+function awd_types() {
+	return array(
+		'practitioner' => array( 'label' => __( 'Practitioner', 'awenly-directory' ), 'plural' => __( 'Practitioners', 'awenly-directory' ), 'icon' => 'user', 'desc' => __( 'You offer sessions, therapy, coaching or classes.', 'awenly-directory' ) ),
+		'centre'       => array( 'label' => __( 'Centre / Studio', 'awenly-directory' ), 'plural' => __( 'Centres & Studios', 'awenly-directory' ), 'icon' => 'home', 'desc' => __( 'A clinic, yoga studio or wellness centre with a team.', 'awenly-directory' ) ),
+		'retreat'      => array( 'label' => __( 'Retreat', 'awenly-directory' ), 'plural' => __( 'Retreats', 'awenly-directory' ), 'icon' => 'sun', 'desc' => __( 'A retreat or wellbeing trip with dates and a place.', 'awenly-directory' ) ),
+		'venue'        => array( 'label' => __( 'Venue', 'awenly-directory' ), 'plural' => __( 'Venues', 'awenly-directory' ), 'icon' => 'door', 'desc' => __( 'A room or space to rent for workshops and circles.', 'awenly-directory' ) ),
+		'shop'         => array( 'label' => __( 'Shop', 'awenly-directory' ), 'plural' => __( 'Shops & Products', 'awenly-directory' ), 'icon' => 'bag', 'desc' => __( 'Crystals, books, natural products, handmade crafts.', 'awenly-directory' ) ),
+		'course'       => array( 'label' => __( 'Course', 'awenly-directory' ), 'plural' => __( 'Courses', 'awenly-directory' ), 'icon' => 'book', 'desc' => __( 'An online or in-person course or training.', 'awenly-directory' ) ),
+	);
+}
+
+function awd_type( $post ) {
+	$id = is_object( $post ) ? $post->ID : (int) $post;
+	$t  = (string) get_post_meta( $id, '_awd_type', true );
+	return array_key_exists( $t, awd_types() ) ? $t : 'practitioner';
+}
+
+/**
+ * Listing fields. "types" limits a field to some listing types (omitted = all).
+ */
 function awd_fields() {
 	return array(
 		'tagline'        => array( 'label' => __( 'Short tagline', 'awenly-directory' ), 'type' => 'text', 'placeholder' => __( 'e.g. Reiki Master & Sound Healer', 'awenly-directory' ), 'max' => 90 ),
 		'location'       => array( 'label' => __( 'City / area', 'awenly-directory' ), 'type' => 'text', 'placeholder' => __( 'e.g. Cork, Ireland', 'awenly-directory' ), 'max' => 80 ),
-		'mode'           => array( 'label' => __( 'Session format', 'awenly-directory' ), 'type' => 'select', 'options' => array( 'Online' => __( 'Online', 'awenly-directory' ), 'In person' => __( 'In person', 'awenly-directory' ), 'Both' => __( 'Online & in person', 'awenly-directory' ) ) ),
+		'mode'           => array( 'label' => __( 'Format', 'awenly-directory' ), 'type' => 'select', 'options' => array( 'Online' => __( 'Online', 'awenly-directory' ), 'In person' => __( 'In person', 'awenly-directory' ), 'Both' => __( 'Online & in person', 'awenly-directory' ) ), 'types' => array( 'practitioner', 'centre', 'course', 'shop' ) ),
+		'date_start'     => array( 'label' => __( 'Starts on', 'awenly-directory' ), 'type' => 'date', 'types' => array( 'retreat', 'course' ) ),
+		'date_end'       => array( 'label' => __( 'Ends on', 'awenly-directory' ), 'type' => 'date', 'types' => array( 'retreat', 'course' ) ),
 		'fee'            => array( 'label' => __( 'Price from', 'awenly-directory' ), 'type' => 'text', 'placeholder' => __( 'e.g. €60 / session', 'awenly-directory' ), 'max' => 40 ),
-		'languages'      => array( 'label' => __( 'Languages', 'awenly-directory' ), 'type' => 'text', 'placeholder' => __( 'e.g. English, Polish', 'awenly-directory' ), 'max' => 80 ),
-		'qualifications' => array( 'label' => __( 'Training & qualifications', 'awenly-directory' ), 'type' => 'text', 'placeholder' => __( 'e.g. Usui Reiki III, ICF coach', 'awenly-directory' ), 'max' => 160 ),
-		'website'        => array( 'label' => __( 'Website', 'awenly-directory' ), 'type' => 'url', 'placeholder' => 'https://' ),
-		'booking_url'    => array( 'label' => __( 'Booking link (Calendly, etc.)', 'awenly-directory' ), 'type' => 'url', 'placeholder' => 'https://' ),
+		'capacity'       => array( 'label' => __( 'Capacity', 'awenly-directory' ), 'type' => 'text', 'placeholder' => __( 'e.g. up to 25 people', 'awenly-directory' ), 'max' => 40, 'types' => array( 'venue', 'retreat', 'centre' ) ),
+		'hours'          => array( 'label' => __( 'Opening hours', 'awenly-directory' ), 'type' => 'text', 'placeholder' => __( 'e.g. Mon–Sat 9:00–19:00', 'awenly-directory' ), 'max' => 80, 'types' => array( 'centre', 'shop', 'venue' ) ),
+		'languages'      => array( 'label' => __( 'Languages', 'awenly-directory' ), 'type' => 'text', 'placeholder' => __( 'e.g. English, Polish', 'awenly-directory' ), 'max' => 80, 'types' => array( 'practitioner', 'centre', 'retreat', 'course' ) ),
+		'qualifications' => array( 'label' => __( 'Training & qualifications', 'awenly-directory' ), 'type' => 'text', 'placeholder' => __( 'e.g. Usui Reiki III, ICF coach', 'awenly-directory' ), 'max' => 160, 'types' => array( 'practitioner', 'centre', 'course', 'retreat' ) ),
+		'website'        => array( 'label' => __( 'Website / shop link', 'awenly-directory' ), 'type' => 'url', 'placeholder' => 'https://' ),
+		'booking_url'    => array( 'label' => __( 'Booking / tickets link', 'awenly-directory' ), 'type' => 'url', 'placeholder' => 'https://', 'types' => array( 'practitioner', 'centre', 'retreat', 'venue', 'course' ) ),
 	);
+}
+
+function awd_field_applies( $field, $type ) {
+	return empty( $field['types'] ) || in_array( $type, $field['types'], true );
 }
 
 function awd_meta( $post_id, $key ) {
@@ -40,6 +71,18 @@ function awd_default_terms() {
 		'yoga'       => 'Yoga & Movement',
 		'breathwork' => 'Breathwork',
 		'wellbeing'  => 'Holistic Wellbeing',
+		'psychology'  => 'Psychology & Psychotherapy',
+		'nutrition'   => 'Nutrition & Dietetics',
+		'naturopathy' => 'Naturopathy & Herbalism',
+		'massage'     => 'Massage & Bodywork',
+		'physio'      => 'Physiotherapy & Osteopathy',
+		'fitness'     => 'Fitness & Personal Training',
+		'dance'       => 'Dance & Pilates',
+		'life-coach'  => 'Life & Business Coaching',
+		'birth'       => 'Pregnancy, Birth & Parenting',
+		'creative'    => 'Art & Music Therapy',
+		'astrology'   => 'Astrology & Tarot',
+		'products'    => 'Natural Products & Crafts',
 	);
 }
 
@@ -50,10 +93,11 @@ function awd_register_types() {
 	if ( ! post_type_exists( AWD_CPT ) ) {
 		register_post_type( AWD_CPT, array(
 			'labels'       => array(
-				'name'          => __( 'Practitioners', 'awenly-directory' ),
-				'singular_name' => __( 'Practitioner', 'awenly-directory' ),
-				'add_new_item'  => __( 'Add Practitioner', 'awenly-directory' ),
-				'edit_item'     => __( 'Edit Practitioner', 'awenly-directory' ),
+				'name'          => __( 'Directory', 'awenly-directory' ),
+				'singular_name' => __( 'Listing', 'awenly-directory' ),
+				'add_new_item'  => __( 'Add Listing', 'awenly-directory' ),
+				'edit_item'     => __( 'Edit Listing', 'awenly-directory' ),
+				'all_items'     => __( 'All Listings', 'awenly-directory' ),
 			),
 			'public'       => true,
 			'has_archive'  => true,
@@ -67,7 +111,7 @@ function awd_register_types() {
 
 	if ( ! taxonomy_exists( AWD_TAX ) ) {
 		register_taxonomy( AWD_TAX, AWD_CPT, array(
-			'labels'       => array( 'name' => __( 'Specialisations', 'awenly-directory' ), 'singular_name' => __( 'Specialisation', 'awenly-directory' ) ),
+			'labels'       => array( 'name' => __( 'Categories', 'awenly-directory' ), 'singular_name' => __( 'Category', 'awenly-directory' ) ),
 			'public'       => true,
 			'hierarchical' => true,
 			'show_in_rest' => true,
@@ -110,6 +154,21 @@ add_action( 'bp_register_member_types', function () {
 /**
  * The (single) listing owned by a user, any status except trash.
  */
+function awd_get_user_listings( $user_id, $published_only = false ) {
+	if ( ! $user_id ) {
+		return array();
+	}
+	return get_posts( array(
+		'post_type'      => AWD_CPT,
+		'author'         => (int) $user_id,
+		'post_status'    => $published_only ? 'publish' : array( 'publish', 'pending', 'draft' ),
+		'posts_per_page' => 20,
+		'orderby'        => 'date',
+		'order'          => 'DESC',
+		'no_found_rows'  => true,
+	) );
+}
+
 function awd_get_user_listing( $user_id ) {
 	if ( ! $user_id ) {
 		return null;

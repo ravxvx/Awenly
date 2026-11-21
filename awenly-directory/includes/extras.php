@@ -13,13 +13,13 @@ function awd_is_verified( $post_id ) {
 }
 
 function awd_verified_badge( $small = false ) {
-	return '<span class="awd-verified' . ( $small ? ' awd-verified--sm' : '' ) . '" title="' . esc_attr__( 'Verified by Awenly Circle', 'awenly-directory' ) . '"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 1.8 14.6 4l3.4-.3.9 3.3 3 1.7-1.2 3.2 1.2 3.2-3 1.7-.9 3.3-3.4-.3L12 22.2 9.4 20l-3.4.3-.9-3.3-3-1.7 1.2-3.2L2.1 8.9l3-1.7L6 3.9l3.4.3z"/><path d="m7.8 12.2 2.7 2.7 5.7-5.8" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>' . ( $small ? '' : '<span>' . esc_html__( 'Verified practitioner', 'awenly-directory' ) . '</span>' ) . '</span>';
+	return '<span class="awd-verified' . ( $small ? ' awd-verified--sm' : '' ) . '" title="' . esc_attr__( 'Verified by Awenly Circle', 'awenly-directory' ) . '"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 1.8 14.6 4l3.4-.3.9 3.3 3 1.7-1.2 3.2 1.2 3.2-3 1.7-.9 3.3-3.4-.3L12 22.2 9.4 20l-3.4.3-.9-3.3-3-1.7 1.2-3.2L2.1 8.9l3-1.7L6 3.9l3.4.3z"/><path d="m7.8 12.2 2.7 2.7 5.7-5.8" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>' . ( $small ? '' : '<span>' . esc_html__( 'Verified', 'awenly-directory' ) . '</span>' ) . '</span>';
 }
 
 add_action( 'add_meta_boxes', function () {
 	add_meta_box( 'awd-verified', __( 'Awenly verification', 'awenly-directory' ), function ( $post ) {
 		wp_nonce_field( 'awd_verified', 'awd_verified_nonce' );
-		echo '<label><input type="checkbox" name="awd_verified" value="1" ' . checked( awd_is_verified( $post->ID ), true, false ) . '> ' . esc_html__( 'Verified practitioner (qualifications checked)', 'awenly-directory' ) . '</label>';
+		echo '<label><input type="checkbox" name="awd_verified" value="1" ' . checked( awd_is_verified( $post->ID ), true, false ) . '> ' . esc_html__( 'Verified (qualifications / business checked)', 'awenly-directory' ) . '</label>';
 		$r   = awd_rating( $post->ID );
 		$lat = get_post_meta( $post->ID, '_awd_lat', true );
 		echo '<p>' . ( '' !== $lat ? esc_html__( 'Map: shown', 'awenly-directory' ) : esc_html__( 'Map: no location found yet', 'awenly-directory' ) . ( get_option( 'awd_geo_last_error' ) ? '<br><small>' . esc_html( get_option( 'awd_geo_last_error' ) ) . '</small>' : '' ) ) . '</p>';
@@ -71,7 +71,7 @@ add_action( 'transition_post_status', function ( $new, $old, $post ) {
 		'user_id'      => $uid,
 		'component'    => 'members',
 		'type'         => 'awd_listing_published',
-		'action'       => sprintf( __( '%1$s joined the Awenly Circle practitioner directory: %2$s', 'awenly-directory' ), bp_core_get_userlink( $uid ), '<a href="' . esc_url( get_permalink( $post ) ) . '">' . esc_html( $post->post_title ) . '</a>' ),
+		'action'       => sprintf( __( '%1$s added a new listing to the Awenly Directory: %2$s', 'awenly-directory' ), bp_core_get_userlink( $uid ), '<a href="' . esc_url( get_permalink( $post ) ) . '">' . esc_html( $post->post_title ) . '</a>' ),
 		'primary_link' => get_permalink( $post ),
 		'item_id'      => $post->ID,
 	) );
@@ -230,7 +230,7 @@ function awd_render_map( $points, $class = '' ) {
 		return;
 	}
 	awd_enqueue_map();
-	echo '<div class="awd-map ' . esc_attr( $class ) . '" data-points="' . esc_attr( wp_json_encode( $points ) ) . '" role="region" aria-label="' . esc_attr__( 'Map of practitioners', 'awenly-directory' ) . '"></div>';
+	echo '<div class="awd-map ' . esc_attr( $class ) . '" data-points="' . esc_attr( wp_json_encode( $points ) ) . '" role="region" aria-label="' . esc_attr__( 'Map of listings', 'awenly-directory' ) . '"></div>';
 }
 
 add_filter( 'litespeed_optimize_js_excludes', function ( $list ) {
@@ -272,8 +272,9 @@ add_action( 'bp_actions', function () {
 		wp_die( esc_html__( 'Your session expired. Please go back and try again.', 'awenly-directory' ) );
 	}
 	$back    = trailingslashit( bp_loggedin_user_domain() ) . 'practice/#events';
-	$listing = awd_get_user_listing( $user_id );
-	if ( ! $listing || 'publish' !== $listing->post_status ) {
+	$pub     = awd_get_user_listings( $user_id, true );
+	$listing = $pub ? $pub[0] : null;
+	if ( ! $listing ) {
 		wp_safe_redirect( add_query_arg( 'awd', 'event_needs_listing', $back ) );
 		exit;
 	}

@@ -255,7 +255,7 @@ function awd_render_reviews( $post ) {
 						</div>
 						<p><?php echo nl2br( esc_html( $c->comment_content ) ); ?></p>
 						<?php foreach ( $replies as $rp ) : ?>
-							<div class="awd-review__reply"><strong><?php esc_html_e( 'Reply from the practitioner', 'awenly-directory' ); ?></strong><p><?php echo nl2br( esc_html( $rp->comment_content ) ); ?></p></div>
+							<div class="awd-review__reply"><strong><?php esc_html_e( 'Reply from the owner', 'awenly-directory' ); ?></strong><p><?php echo nl2br( esc_html( $rp->comment_content ) ); ?></p></div>
 						<?php endforeach; ?>
 						<div class="awd-review__actions">
 							<?php if ( $is_owner && ! $replies ) : ?>
@@ -284,7 +284,7 @@ function awd_render_reviews( $post ) {
 		<?php elseif ( $is_owner ) : ?>
 			<p class="awd-muted"><?php esc_html_e( 'You can reply to each review on your listing once.', 'awenly-directory' ); ?></p>
 		<?php elseif ( $mine ) : ?>
-			<p class="awd-muted"><?php echo '0' === (string) $mine->comment_approved ? esc_html__( 'Your review is waiting for approval.', 'awenly-directory' ) : esc_html__( 'You have already reviewed this practitioner. Thank you!', 'awenly-directory' ); ?></p>
+			<p class="awd-muted"><?php echo '0' === (string) $mine->comment_approved ? esc_html__( 'Your review is waiting for approval.', 'awenly-directory' ) : esc_html__( 'You have already reviewed this listing. Thank you!', 'awenly-directory' ); ?></p>
 		<?php else : ?>
 			<form class="awd-review-form" method="post">
 				<?php wp_nonce_field( 'awd_review_' . $post->ID, 'awd_rnonce' ); ?>
