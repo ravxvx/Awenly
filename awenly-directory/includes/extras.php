@@ -20,7 +20,9 @@ add_action( 'add_meta_boxes', function () {
 	add_meta_box( 'awd-verified', __( 'Awenly verification', 'awenly-directory' ), function ( $post ) {
 		wp_nonce_field( 'awd_verified', 'awd_verified_nonce' );
 		echo '<label><input type="checkbox" name="awd_verified" value="1" ' . checked( awd_is_verified( $post->ID ), true, false ) . '> ' . esc_html__( 'Verified practitioner (qualifications checked)', 'awenly-directory' ) . '</label>';
-		$r = awd_rating( $post->ID );
+		$r   = awd_rating( $post->ID );
+		$lat = get_post_meta( $post->ID, '_awd_lat', true );
+		echo '<p>' . ( '' !== $lat ? esc_html__( 'Map: shown', 'awenly-directory' ) : esc_html__( 'Map: no location found yet', 'awenly-directory' ) . ( get_option( 'awd_geo_last_error' ) ? '<br><small>' . esc_html( get_option( 'awd_geo_last_error' ) ) . '</small>' : '' ) ) . '</p>';
 		echo '<p style="margin-top:10px">' . esc_html( sprintf( __( 'Rating: %1$s (%2$d reviews) · Views: %3$d', 'awenly-directory' ), number_format_i18n( $r['avg'], 1 ), $r['count'], (int) get_post_meta( $post->ID, '_awd_views', true ) ) ) . '</p>';
 	}, AWD_CPT, 'side', 'high' );
 } );
@@ -102,10 +104,54 @@ add_action( 'template_redirect', function () {
 
 /* ===================== Map: geocoding (OpenStreetMap Nominatim) ===================== */
 
+/**
+ * Geocode a place name with free services (no API key): Nominatim → Open-Meteo → Photon.
+ */
+function awd_geocode( $place ) {
+	$key    = 'awd_geo_' . md5( strtolower( $place ) );
+	$cached = get_transient( $key );
+	if ( is_array( $cached ) ) {
+		return $cached;
+	}
+	$args = array( 'timeout' => 6, 'user-agent' => 'AwenlyCircle/1.1 (' . home_url() . '; ' . get_option( 'admin_email' ) . ')', 'headers' => array( 'Accept-Language' => 'en' ) );
+	$try  = array(
+		array( add_query_arg( array( 'format' => 'json', 'limit' => 1, 'q' => rawurlencode( $place ) ), 'https://nominatim.openstreetmap.org/search' ), function ( $d ) {
+			return isset( $d[0]['lat'], $d[0]['lon'] ) ? array( (float) $d[0]['lat'], (float) $d[0]['lon'] ) : null;
+		} ),
+		array( add_query_arg( array( 'count' => 1, 'language' => 'en', 'name' => rawurlencode( trim( explode( ',', $place )[0] ) ) ), 'https://geocoding-api.open-meteo.com/v1/search' ), function ( $d ) {
+			return isset( $d['results'][0]['latitude'] ) ? array( (float) $d['results'][0]['latitude'], (float) $d['results'][0]['longitude'] ) : null;
+		} ),
+		array( add_query_arg( array( 'limit' => 1, 'q' => rawurlencode( $place ) ), 'https://photon.komoot.io/api/' ), function ( $d ) {
+			return isset( $d['features'][0]['geometry']['coordinates'] ) ? array( (float) $d['features'][0]['geometry']['coordinates'][1], (float) $d['features'][0]['geometry']['coordinates'][0] ) : null;
+		} ),
+	);
+	$errors = array();
+	foreach ( $try as $t ) {
+		$res = wp_remote_get( $t[0], $args );
+		if ( is_wp_error( $res ) ) {
+			$errors[] = $res->get_error_message();
+			continue;
+		}
+		$code = wp_remote_retrieve_response_code( $res );
+		if ( 200 !== (int) $code ) {
+			$errors[] = wp_parse_url( $t[0], PHP_URL_HOST ) . ' HTTP ' . $code;
+			continue;
+		}
+		$c = call_user_func( $t[1], json_decode( wp_remote_retrieve_body( $res ), true ) );
+		if ( $c ) {
+			set_transient( $key, $c, 30 * DAY_IN_SECONDS );
+			return $c;
+		}
+		$errors[] = wp_parse_url( $t[0], PHP_URL_HOST ) . ' no result';
+	}
+	update_option( 'awd_geo_last_error', gmdate( 'Y-m-d H:i' ) . ' "' . $place . '": ' . implode( ' | ', $errors ), false );
+	return null;
+}
+
 function awd_geocode_listing( $post_id ) {
 	$loc  = trim( awd_meta( $post_id, 'location' ) );
 	$mode = awd_meta( $post_id, 'mode' );
-	if ( '' === $loc || 'Online' === $mode ) {
+	if ( '' === $loc ) {
 		delete_post_meta( $post_id, '_awd_lat' );
 		delete_post_meta( $post_id, '_awd_lng' );
 		update_post_meta( $post_id, '_awd_geo_for', $loc . '|' . $mode );
@@ -114,42 +160,59 @@ function awd_geocode_listing( $post_id ) {
 	if ( get_post_meta( $post_id, '_awd_geo_for', true ) === $loc . '|' . $mode ) {
 		return; // unchanged
 	}
-	$res = wp_remote_get( add_query_arg( array( 'format' => 'json', 'limit' => 1, 'q' => $loc ), 'https://nominatim.openstreetmap.org/search' ), array(
-		'timeout'    => 8,
-		'user-agent' => 'AwenlyCircle/1.1 (' . home_url() . ')',
-		'headers'    => array( 'Accept-Language' => 'en' ),
-	) );
-	if ( is_wp_error( $res ) || 200 !== wp_remote_retrieve_response_code( $res ) ) {
+	$fail = (int) get_post_meta( $post_id, '_awd_geo_fail', true );
+	if ( $fail && time() - $fail < 6 * HOUR_IN_SECONDS ) {
+		return; // recently failed, try again later
+	}
+	$coords = awd_geocode( $loc );
+	if ( ! $coords ) {
+		update_post_meta( $post_id, '_awd_geo_fail', time() );
 		return;
 	}
-	$data = json_decode( wp_remote_retrieve_body( $res ), true );
-	if ( ! empty( $data[0]['lat'] ) && ! empty( $data[0]['lon'] ) ) {
-		update_post_meta( $post_id, '_awd_lat', (float) $data[0]['lat'] );
-		update_post_meta( $post_id, '_awd_lng', (float) $data[0]['lon'] );
-	}
+	delete_post_meta( $post_id, '_awd_geo_fail' );
+	update_post_meta( $post_id, '_awd_lat', $coords[0] );
+	update_post_meta( $post_id, '_awd_lng', $coords[1] );
 	update_post_meta( $post_id, '_awd_geo_for', $loc . '|' . $mode );
 }
-add_action( 'awd_listing_saved', 'awd_geocode_listing' );
+add_action( 'awd_listing_saved', function ( $post_id ) {
+	delete_post_meta( $post_id, '_awd_geo_fail' );
+	awd_geocode_listing( $post_id );
+} );
 add_action( 'save_post_' . AWD_CPT, function ( $post_id ) {
 	if ( wp_is_post_revision( $post_id ) || ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) ) {
 		return;
 	}
+	delete_post_meta( $post_id, '_awd_geo_fail' );
 	awd_geocode_listing( $post_id );
 }, 99 );
 
 function awd_map_points( $post_ids ) {
-	$out = array();
+	$out    = array();
+	$budget = 3; // geocode at most a few older listings per page view
 	foreach ( $post_ids as $id ) {
+		$loc = trim( awd_meta( $id, 'location' ) );
+		if ( $budget > 0 && '' !== $loc && get_post_meta( $id, '_awd_geo_for', true ) !== $loc . '|' . awd_meta( $id, 'mode' ) ) {
+			awd_geocode_listing( $id );
+			$budget--;
+		}
 		$lat = get_post_meta( $id, '_awd_lat', true );
 		$lng = get_post_meta( $id, '_awd_lng', true );
 		if ( '' === $lat || '' === $lng ) {
+			if ( '' !== $loc ) { // let the browser geocode it
+				$out[] = array(
+					'q'     => $loc,
+					'title' => get_the_title( $id ),
+					'place' => $loc . ( 'Online' === awd_meta( $id, 'mode' ) ? ' · ' . __( 'sessions online', 'awenly-directory' ) : '' ),
+					'url'   => get_permalink( $id ),
+				);
+			}
 			continue;
 		}
 		$out[] = array(
 			'lat'   => (float) $lat,
 			'lng'   => (float) $lng,
 			'title' => get_the_title( $id ),
-			'place' => awd_meta( $id, 'location' ),
+			'place' => awd_meta( $id, 'location' ) . ( 'Online' === awd_meta( $id, 'mode' ) ? ' · ' . __( 'sessions online', 'awenly-directory' ) : '' ),
 			'url'   => get_permalink( $id ),
 		);
 	}

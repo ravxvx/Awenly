@@ -8,6 +8,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 add_action( 'wp_enqueue_scripts', function () {
 	wp_enqueue_style( 'awenly-directory', AWD_URI . 'assets/directory.css', array(), AWD_VERSION );
+	if ( is_user_logged_in() && function_exists( 'bp_is_user' ) && bp_is_user() ) {
+		wp_enqueue_script( 'awenly-directory-photo', AWD_URI . 'assets/photo.js', array(), AWD_VERSION, true );
+	}
 }, 10000 );
 
 /**
@@ -104,13 +107,16 @@ function awd_render_card( $post, $wide = false ) {
 	$terms = wp_get_object_terms( $post->ID, AWD_TAX );
 	$mode  = awd_meta( $post->ID, 'mode' );
 	$modes = awd_fields()['mode']['options'];
+	$url   = get_permalink( $post );
+	$rt    = awd_rating( $post->ID );
 	?>
 	<article class="awd-card<?php echo $wide ? ' awd-card--wide' : ''; ?>">
-		<a class="awd-card__photo" href="<?php echo esc_url( get_permalink( $post ) ); ?>" tabindex="-1" aria-hidden="true"><?php echo awd_photo( $post, 'medium_large' ); // phpcs:ignore ?></a>
+		<div class="awd-card__cover" aria-hidden="true"></div>
+		<a class="awd-card__avatar" href="<?php echo esc_url( $url ); ?>" tabindex="-1" aria-hidden="true"><?php echo awd_photo( $post, 'medium' ); // phpcs:ignore ?></a>
 		<div class="awd-card__body">
-			<h3><a href="<?php echo esc_url( get_permalink( $post ) ); ?>"><?php echo esc_html( get_the_title( $post ) ); ?></a><?php echo awd_is_verified( $post->ID ) ? awd_verified_badge( true ) : ''; // phpcs:ignore ?></h3>
-			<?php $rt = awd_rating( $post->ID ); if ( $rt['count'] ) : ?><div class="awd-card__rating"><?php echo awd_stars( $rt['avg'], $rt['count'], true ); // phpcs:ignore ?></div><?php endif; ?>
+			<h3><a href="<?php echo esc_url( $url ); ?>"><?php echo esc_html( get_the_title( $post ) ); ?></a><?php echo awd_is_verified( $post->ID ) ? awd_verified_badge( true ) : ''; // phpcs:ignore ?></h3>
 			<?php if ( $post->post_excerpt ) : ?><p class="awd-card__tag"><?php echo esc_html( $post->post_excerpt ); ?></p><?php endif; ?>
+			<div class="awd-card__rating"><?php echo awd_stars( $rt['avg'], $rt['count'], true ); // phpcs:ignore ?></div>
 			<?php if ( $terms && ! is_wp_error( $terms ) ) : ?>
 				<div class="awd-chips"><?php foreach ( array_slice( $terms, 0, 3 ) as $t ) : ?><span><?php echo esc_html( $t->name ); ?></span><?php endforeach; ?></div>
 			<?php endif; ?>
@@ -119,7 +125,12 @@ function awd_render_card( $post, $wide = false ) {
 				<?php if ( $mode ) : ?><li><?php echo awd_icon( 'video' ); // phpcs:ignore ?><?php echo esc_html( $modes[ $mode ] ?? $mode ); ?></li><?php endif; ?>
 				<?php if ( awd_meta( $post->ID, 'fee' ) ) : ?><li><?php echo awd_icon( 'tag' ); // phpcs:ignore ?><?php echo esc_html( awd_meta( $post->ID, 'fee' ) ); ?></li><?php endif; ?>
 			</ul>
-			<a class="awd-card__link" href="<?php echo esc_url( get_permalink( $post ) ); ?>"><?php esc_html_e( 'View profile', 'awenly-directory' ); ?> →</a>
+			<div class="awd-card__actions">
+				<a class="awd-btn awd-btn--sm" href="<?php echo esc_url( $url ); ?>"><?php esc_html_e( 'View profile', 'awenly-directory' ); ?></a>
+				<?php $msg = awd_message_url( $post ); if ( $msg ) : ?>
+					<a class="awd-btn awd-btn--sm awd-btn--ghost" href="<?php echo esc_url( $msg ); ?>"><?php echo awd_icon( 'msg' ); // phpcs:ignore ?><?php esc_html_e( 'Message', 'awenly-directory' ); ?></a>
+				<?php endif; ?>
+			</div>
 		</div>
 	</article>
 	<?php
