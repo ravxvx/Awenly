@@ -63,7 +63,7 @@ while ( have_posts() ) :
 	<div class="awd-single awd-single--<?php echo esc_attr( $type ); ?>">
 		<section class="awd-single__hero">
 			<div class="awd-single__cover<?php echo $cover ? ' has-image' : ''; ?>"<?php echo $cover ? ' style="background-image:url(' . esc_url( $cover ) . ')"' : ''; ?>>
-				<div class="awd-container"><a class="awd-back" href="<?php echo esc_url( awd_directory_url() ); ?>">← <?php esc_html_e( 'Directory', 'awenly-directory' ); ?></a></div>
+				<div class="awd-container"><a class="awd-back" href="<?php echo esc_url( awd_directory_url() ); ?>">← <?php esc_html_e( 'All practitioners', 'awenly-directory' ); ?></a></div>
 			</div>
 			<div class="awd-container">
 				<div class="awd-single__card">

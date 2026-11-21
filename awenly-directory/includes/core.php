@@ -93,7 +93,7 @@ function awd_register_types() {
 	if ( ! post_type_exists( AWD_CPT ) ) {
 		register_post_type( AWD_CPT, array(
 			'labels'       => array(
-				'name'          => __( 'Directory', 'awenly-directory' ),
+				'name'          => __( 'Practitioners', 'awenly-directory' ),
 				'singular_name' => __( 'Listing', 'awenly-directory' ),
 				'add_new_item'  => __( 'Add Listing', 'awenly-directory' ),
 				'edit_item'     => __( 'Edit Listing', 'awenly-directory' ),

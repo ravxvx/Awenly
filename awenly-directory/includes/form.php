@@ -27,7 +27,7 @@ add_action( 'bp_setup_nav', function () {
 		return;
 	}
 	bp_core_new_nav_item( array(
-		'name'                    => $is_own ? __( 'My Listings', 'awenly-directory' ) : __( 'Listings', 'awenly-directory' ),
+		'name'                    => $is_own ? __( 'My Practice', 'awenly-directory' ) : __( 'Practice', 'awenly-directory' ),
 		'slug'                    => 'practice',
 		'position'                => 25,
 		'screen_function'         => 'awd_practice_screen',

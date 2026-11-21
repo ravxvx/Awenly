@@ -40,7 +40,7 @@ add_action( 'transition_post_status', function ( $new, $old, $post ) {
 				$author->user_email,
 				sprintf( '[%s] Your listing is live', wp_specialchars_decode( get_bloginfo( 'name' ) ) ),
 				sprintf(
-					"Hi %s,\n\nGood news — your listing \"%s\" is now live in the Awenly Directory:\n%s\n\nYou can update it any time from the \"My Listings\" tab on your profile.\n\nWelcome to the circle!\n",
+					"Hi %s,\n\nGood news — your listing \"%s\" is now live in the Awenly Circle practitioner directory:\n%s\n\nYou can update it any time from the \"My Practice\" tab on your profile.\n\nWelcome to the circle!\n",
 					$author->display_name,
 					$post->post_title,
 					get_permalink( $post )

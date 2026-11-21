@@ -16,7 +16,7 @@ get_header();
 	<section class="awd-hero">
 		<div class="awd-container">
 			<span class="awd-kicker"><?php esc_html_e( 'Practitioners · centres · retreats · venues · shops · courses', 'awenly-directory' ); ?></span>
-			<h1><?php esc_html_e( 'Awenly Directory', 'awenly-directory' ); ?></h1>
+			<h1><?php esc_html_e( 'Practitioner Directory', 'awenly-directory' ); ?></h1>
 			<p><?php esc_html_e( 'Therapists, coaches, healers, studios, retreats and more from the Awenly Circle community — online and in person.', 'awenly-directory' ); ?></p>
 			<nav class="awd-typetabs" aria-label="<?php esc_attr_e( 'Listing type', 'awenly-directory' ); ?>">
 				<a href="<?php echo esc_url( remove_query_arg( array( 'type', 'paged' ) ) ); ?>" class="<?php echo $filters['type'] ? '' : 'is-active'; ?>"><?php esc_html_e( 'Everything', 'awenly-directory' ); ?></a>
