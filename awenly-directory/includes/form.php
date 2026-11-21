@@ -119,21 +119,36 @@ add_action( 'bp_actions', function () {
 	wp_set_object_terms( $post_id, $terms, AWD_TAX );
 
 	// Photo (optional).
+	$photo_flag = '';
 	if ( ! empty( $_FILES['awd_photo']['name'] ) ) {
 		$file = $_FILES['awd_photo']; // phpcs:ignore
-		$ok   = in_array( wp_check_filetype( $file['name'] )['type'], array( 'image/jpeg', 'image/png', 'image/webp' ), true ) && (int) $file['size'] <= 6 * MB_IN_BYTES;
-		if ( $ok ) {
-			require_once ABSPATH . 'wp-admin/includes/file.php';
-			require_once ABSPATH . 'wp-admin/includes/media.php';
-			require_once ABSPATH . 'wp-admin/includes/image.php';
-			$att = media_handle_upload( 'awd_photo', $post_id );
-			if ( ! is_wp_error( $att ) ) {
-				set_post_thumbnail( $post_id, $att );
+		if ( UPLOAD_ERR_OK !== (int) $file['error'] ) {
+			$photo_flag = in_array( (int) $file['error'], array( UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE ), true ) ? 'photo_big' : 'photo_error';
+		} elseif ( (int) $file['size'] > 10 * MB_IN_BYTES ) {
+			$photo_flag = 'photo_big';
+		} else {
+			$check = wp_check_filetype_and_ext( $file['tmp_name'], $file['name'] );
+			if ( ! in_array( $check['type'], array( 'image/jpeg', 'image/png', 'image/webp' ), true ) ) {
+				$photo_flag = 'photo_type';
+			} else {
+				require_once ABSPATH . 'wp-admin/includes/file.php';
+				require_once ABSPATH . 'wp-admin/includes/media.php';
+				require_once ABSPATH . 'wp-admin/includes/image.php';
+				$att = media_handle_upload( 'awd_photo', $post_id, array(), array( 'test_form' => false ) );
+				if ( is_wp_error( $att ) ) {
+					$photo_flag = 'photo_error';
+				} else {
+					set_post_thumbnail( $post_id, $att );
+				}
 			}
 		}
+	} elseif ( ! empty( $_POST['awd_remove_photo'] ) ) {
+		delete_post_thumbnail( $post_id );
 	}
 
-	$flag = $listing ? 'saved' : 'submitted';
+	do_action( 'awd_listing_saved', $post_id );
+
+	$flag = $photo_flag ? $photo_flag : ( $listing ? 'saved' : 'submitted' );
 	wp_safe_redirect( add_query_arg( 'awd', $flag, $redirect ) );
 	exit;
 } );
@@ -161,6 +176,12 @@ function awd_practice_content() {
 		'saved'     => array( 'ok', __( 'Your listing has been saved.', 'awenly-directory' ) ),
 		'missing'   => array( 'err', __( 'Please fill in your practice name and the "About" section.', 'awenly-directory' ) ),
 		'error'     => array( 'err', __( 'Something went wrong. Please try again.', 'awenly-directory' ) ),
+		'photo_big'   => array( 'err', __( 'Your details were saved, but the photo is too large. Please choose a smaller image.', 'awenly-directory' ) ),
+		'photo_type'  => array( 'err', __( 'Your details were saved, but the photo must be a JPG, PNG or WebP image.', 'awenly-directory' ) ),
+		'photo_error' => array( 'err', __( 'Your details were saved, but the photo could not be uploaded. Please try again.', 'awenly-directory' ) ),
+		'event_submitted'     => array( 'ok', __( 'Thank you! Your event was sent for review.', 'awenly-directory' ) ),
+		'event_invalid'       => array( 'err', __( 'Please add a title, a future date and a start time for your event.', 'awenly-directory' ) ),
+		'event_needs_listing' => array( 'err', __( 'Your listing needs to be approved before you can add events.', 'awenly-directory' ) ),
 	);
 	if ( isset( $notices[ $notice ] ) ) {
 		printf( '<div class="awd-notice awd-notice--%s">%s</div>', esc_attr( $notices[ $notice ][0] ), esc_html( $notices[ $notice ][1] ) );
@@ -176,7 +197,9 @@ function awd_practice_content() {
 		$st = $status_map[ $listing->post_status ] ?? $status_map['draft'];
 		echo '<div class="awd-status awd-status--' . esc_attr( $st[0] ) . '"><span>' . esc_html( $st[1] ) . '</span>';
 		if ( 'publish' === $listing->post_status ) {
+			$r = awd_rating( $listing->ID );
 			echo ' <a href="' . esc_url( get_permalink( $listing ) ) . '">' . esc_html__( 'View my listing →', 'awenly-directory' ) . '</a>';
+			echo '<em class="awd-stats">' . esc_html( sprintf( __( '%1$d views · %2$s ★ (%3$d reviews)', 'awenly-directory' ), (int) get_post_meta( $listing->ID, '_awd_views', true ), number_format_i18n( $r['avg'], 1 ), $r['count'] ) ) . ( awd_is_verified( $listing->ID ) ? ' · ' . esc_html__( 'Verified', 'awenly-directory' ) : '' ) . '</em>';
 		}
 		echo '</div>';
 	} else {
@@ -227,11 +250,27 @@ function awd_practice_content() {
 
 		<div class="awd-field awd-field--wide awd-photo">
 			<span><?php esc_html_e( 'Listing photo', 'awenly-directory' ); ?></span>
-			<?php if ( $id && has_post_thumbnail( $id ) ) {
-				echo get_the_post_thumbnail( $id, 'thumbnail' );
-			} ?>
-			<input type="file" name="awd_photo" accept="image/jpeg,image/png,image/webp">
-			<small><?php esc_html_e( 'JPG, PNG or WebP, max 6 MB. Without a photo, your profile picture is used.', 'awenly-directory' ); ?></small>
+			<div class="awd-photo__row">
+				<div class="awd-photo__preview" data-awd-preview><?php
+					if ( $id && has_post_thumbnail( $id ) ) {
+						echo get_the_post_thumbnail( $id, 'medium' );
+					} elseif ( $listing ) {
+						echo awd_photo( $listing, 'medium' ); // phpcs:ignore
+					} else {
+						echo get_avatar( get_current_user_id(), 240 );
+					}
+				?></div>
+				<div class="awd-photo__ctrl">
+					<label class="awd-btn awd-btn--ghost awd-btn--sm awd-photo__pick">
+						<input type="file" name="awd_photo" accept="image/*" data-awd-photo hidden>
+						<?php echo $id && has_post_thumbnail( $id ) ? esc_html__( 'Change photo', 'awenly-directory' ) : esc_html__( 'Upload a photo', 'awenly-directory' ); ?>
+					</label>
+					<?php if ( $id && has_post_thumbnail( $id ) ) : ?>
+						<label class="awd-check awd-photo__remove"><input type="checkbox" name="awd_remove_photo" value="1"> <?php esc_html_e( 'Remove photo', 'awenly-directory' ); ?></label>
+					<?php endif; ?>
+					<small data-awd-photo-msg><?php esc_html_e( 'A clear, friendly portrait works best. Large photos are resized automatically.', 'awenly-directory' ); ?></small>
+				</div>
+			</div>
 		</div>
 
 		<?php if ( $listing && get_post_meta( $listing->ID, '_awd_approved', true ) ) : ?>
@@ -241,5 +280,6 @@ function awd_practice_content() {
 		<button type="submit" class="awd-btn"><?php echo $listing ? esc_html__( 'Save listing', 'awenly-directory' ) : esc_html__( 'Submit for review', 'awenly-directory' ); ?></button>
 	</form>
 	<?php
+	awd_render_event_form( $listing );
 	echo '</div>';
 }

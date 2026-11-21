@@ -34,6 +34,15 @@ get_header();
 					<?php endforeach; ?>
 				</select>
 				<button type="submit" class="awd-btn"><?php esc_html_e( 'Search', 'awenly-directory' ); ?></button>
+				<div class="awd-filters__row">
+					<label class="awd-check"><input type="checkbox" name="verified" value="1" <?php checked( $filters['verified'] ); ?>> <?php esc_html_e( 'Verified only', 'awenly-directory' ); ?></label>
+					<label class="awd-sort"><?php esc_html_e( 'Sort:', 'awenly-directory' ); ?>
+						<select name="sort" onchange="this.form.submit()">
+							<option value=""><?php esc_html_e( 'Recommended', 'awenly-directory' ); ?></option>
+							<option value="rating" <?php selected( $filters['sort'], 'rating' ); ?>><?php esc_html_e( 'Top rated', 'awenly-directory' ); ?></option>
+							<option value="new" <?php selected( $filters['sort'], 'new' ); ?>><?php esc_html_e( 'Newest', 'awenly-directory' ); ?></option>
+						</select></label>
+				</div>
 			</form>
 			<div class="awd-quick">
 				<a href="<?php echo esc_url( awd_directory_url() ); ?>" class="<?php echo $filters['specialty'] ? '' : 'is-active'; ?>"><?php esc_html_e( 'All', 'awenly-directory' ); ?></a>
@@ -45,6 +54,12 @@ get_header();
 	</section>
 
 	<section class="awd-container awd-results">
+		<?php
+		if ( $q->have_posts() ) {
+			$all_ids = awd_query( $filters, 1, array( 'posts_per_page' => 300, 'fields' => 'ids', 'no_found_rows' => true ) )->posts;
+			awd_render_map( awd_map_points( $all_ids ), 'awd-map--directory' );
+		}
+		?>
 		<?php if ( $q->have_posts() ) : ?>
 			<p class="awd-count"><?php echo esc_html( sprintf( _n( '%d practitioner', '%d practitioners', $q->found_posts, 'awenly-directory' ), $q->found_posts ) ); ?></p>
 			<div class="awd-grid-cards">
@@ -63,7 +78,7 @@ get_header();
 		<?php else : ?>
 			<div class="awd-empty">
 				<h2><?php esc_html_e( 'No practitioners found yet', 'awenly-directory' ); ?></h2>
-				<p><?php echo ( $filters['q'] || $filters['specialty'] || $filters['mode'] || $filters['location'] ) ? esc_html__( 'Try a different filter — or be the first to list your practice.', 'awenly-directory' ) : esc_html__( 'Our directory is just opening. Be one of the first practitioners in the circle.', 'awenly-directory' ); ?></p>
+				<p><?php echo ( $filters['q'] || $filters['specialty'] || $filters['mode'] || $filters['location'] || $filters['verified'] ) ? esc_html__( 'Try a different filter — or be the first to list your practice.', 'awenly-directory' ) : esc_html__( 'Our directory is just opening. Be one of the first practitioners in the circle.', 'awenly-directory' ); ?></p>
 			</div>
 		<?php endif; ?>
 

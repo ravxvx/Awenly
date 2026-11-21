@@ -32,6 +32,10 @@ while ( have_posts() ) :
 					<a class="awd-back" href="<?php echo esc_url( awd_directory_url() ); ?>">← <?php esc_html_e( 'All practitioners', 'awenly-directory' ); ?></a>
 					<span class="awd-kicker"><?php esc_html_e( 'Awenly Circle practitioner', 'awenly-directory' ); ?></span>
 					<h1><?php the_title(); ?></h1>
+					<div class="awd-single__badges">
+						<?php echo awd_is_verified( $post->ID ) ? awd_verified_badge() : ''; // phpcs:ignore ?>
+						<?php $rt = awd_rating( $post->ID ); ?><a href="#reviews" class="awd-single__rating"><?php echo awd_stars( $rt['avg'], $rt['count'] ); // phpcs:ignore ?></a>
+					</div>
 					<?php if ( $post->post_excerpt ) : ?><p class="awd-single__tag"><?php echo esc_html( $post->post_excerpt ); ?></p><?php endif; ?>
 					<?php if ( $terms && ! is_wp_error( $terms ) ) : ?>
 						<div class="awd-chips"><?php foreach ( $terms as $t ) : ?><a href="<?php echo esc_url( add_query_arg( 'specialty', $t->slug, awd_directory_url() ) ); ?>"><?php echo esc_html( $t->name ); ?></a><?php endforeach; ?></div>
@@ -63,8 +67,27 @@ while ( have_posts() ) :
 						<li><?php echo awd_icon( 'globe' ); // phpcs:ignore ?><span><small><?php esc_html_e( 'Website', 'awenly-directory' ); ?></small><a href="<?php echo esc_url( $website ); ?>" target="_blank" rel="noopener nofollow"><?php echo esc_html( preg_replace( '#^https?://(www\.)?#', '', untrailingslashit( $website ) ) ); ?></a></span></li>
 					<?php endif; ?>
 				</ul>
+				<?php awd_render_map( awd_map_points( array( $post->ID ) ), 'awd-map--single' ); ?>
 			</aside>
 		</section>
+
+		<?php
+		$events = awd_practitioner_events( (int) $post->post_author );
+		if ( $events ) : ?>
+			<section class="awd-container awd-single__events">
+				<h2><?php esc_html_e( 'Upcoming events', 'awenly-directory' ); ?></h2>
+				<div class="awd-event-list">
+					<?php foreach ( $events as $ev ) : ?>
+						<a class="awd-event" href="<?php echo esc_url( get_permalink( $ev ) ); ?>">
+							<span class="awd-event__date"><b><?php echo esc_html( tribe_get_start_date( $ev->ID, false, 'd' ) ); ?></b><small><?php echo esc_html( tribe_get_start_date( $ev->ID, false, 'M' ) ); ?></small></span>
+							<span><strong><?php echo esc_html( get_the_title( $ev ) ); ?></strong><small><?php echo esc_html( tribe_get_start_date( $ev->ID, false, 'D, H:i' ) ); ?><?php $w = get_post_meta( $ev->ID, '_awenly_event_location', true ); echo $w ? ' · ' . esc_html( $w ) : ''; ?></small></span>
+						</a>
+					<?php endforeach; ?>
+				</div>
+			</section>
+		<?php endif; ?>
+
+		<div class="awd-container"><?php awd_render_reviews( $post ); ?></div>
 	</div>
 	<?php
 endwhile;
