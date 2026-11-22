@@ -72,7 +72,11 @@ add_action( AWD_GI_HOOK, function () {
 
 /* ---------- SerpApi ---------- */
 
-function awd_gi_search( $key, $q, $place ) {
+function awd_gi_search( $key, $q, $place, &$debug = null ) {
+	return awd_gi_search_once( $key, $q, $place, $debug );
+}
+
+function awd_gi_search_once( $key, $q, $place, &$debug = null ) {
 	$args = array( 'engine' => 'google_events', 'q' => $q, 'api_key' => $key, 'output' => 'json' );
 	if ( $place ) {
 		$args['location'] = $place;
@@ -85,6 +89,8 @@ function awd_gi_search( $key, $q, $place ) {
 	if ( ! is_array( $body ) ) {
 		return new WP_Error( 'bad', 'SerpApi returned HTTP ' . wp_remote_retrieve_response_code( $r ) );
 	}
+	$debug[] = ( $place ? 'location=' . $place : 'no location' ) . ' → ' . ( ! empty( $body['error'] ) ? $body['error'] : count( (array) ( $body['events_results'] ?? array() ) ) . ' results' )
+		. ( ! empty( $body['search_metadata']['google_events_url'] ) ? ' · ' . $body['search_metadata']['google_events_url'] : '' );
 	if ( ! empty( $body['error'] ) ) {
 		// "Google hasn't returned any results" is not a failure, just an empty search.
 		return false !== stripos( $body['error'], "hasn't returned any results" ) ? array() : new WP_Error( 'api', $body['error'] );
@@ -265,8 +271,14 @@ function awd_gi_run( $dry = false ) {
 		if ( ! $dry && $log['new'] >= (int) $o['max_new'] ) {
 			break;
 		}
-		$res = awd_gi_search( $o['key'], $qq['q'], $qq['place'] );
-		$log['searches']++;
+		$dbg = array();
+		$res = awd_gi_search( $o['key'], $qq['q'], $qq['place'], $dbg );
+		$log['searches'] += count( $dbg );
+		if ( $dry ) {
+			$log['debug'] = array_merge( $log['debug'] ?? array(), array_map( function ( $d ) use ( $qq ) {
+				return '"' . $qq['q'] . '" ' . $d;
+			}, $dbg ) );
+		}
 		if ( is_wp_error( $res ) ) {
 			$log['errors'][] = $qq['q'] . ': ' . $res->get_error_message();
 			if ( preg_match( '/run out|invalid api key|limit/i', $res->get_error_message() ) ) {
@@ -454,6 +466,7 @@ function awd_gi_page() {
 			<div class="notice <?php echo $result['errors'] ? 'notice-warning' : 'notice-success'; ?>">
 				<p><strong><?php echo $result['dry'] ? 'Test search (nothing saved)' : 'Import finished'; ?>:</strong>
 				<?php printf( '%d searches, %d events found, %d %s, %d skipped.', (int) $result['searches'], (int) $result['found'], (int) $result['new'], $result['dry'] ? 'would be imported' : 'imported', (int) $result['skipped'] ); ?></p>
+				<?php foreach ( (array) ( $result['debug'] ?? array() ) as $dl ) : ?><p style="font-family:monospace;font-size:12px;color:#50575e;word-break:break-all"><?php echo esc_html( $dl ); ?></p><?php endforeach; ?>
 				<?php foreach ( $result['errors'] as $er ) : ?><p style="color:#b32d2e"><?php echo esc_html( $er ); ?></p><?php endforeach; ?>
 				<?php if ( $result['items'] ) : ?>
 					<table class="widefat striped" style="margin:8px 0 12px"><thead><tr><th>Event</th><th>When</th><th>Where</th><th>Result</th></tr></thead><tbody>
