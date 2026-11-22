@@ -345,6 +345,9 @@ add_action( 'tribe_template_before_include:events/v2/components/events-bar', fun
 	}
 	$done = true;
 	awd_events_assets();
+	if ( ! is_singular() ) {
+		echo '<h1 class="awd-ev-h1">' . esc_html__( 'Wellbeing events, workshops & retreats', 'awenly-directory' ) . '</h1><p class="awd-ev-lead">' . esc_html__( 'Healing circles, workshops, retreats and online sessions hosted by the Awenly Circle community.', 'awenly-directory' ) . '</p>';
+	}
 	echo '<div class="awd-ev-bar"><span>' . esc_html__( 'Running a workshop, circle or retreat?', 'awenly-directory' ) . '</span><a class="awd-btn awd-btn--sm" href="' . esc_url( awd_add_event_url() ) . '">' . esc_html__( '+ Add your event', 'awenly-directory' ) . '</a>'
 		. ( is_user_logged_in() ? ' <a class="awd-btn awd-btn--sm awd-btn--ghost" href="' . esc_url( awd_my_events_url() ) . '">' . esc_html__( 'My events', 'awenly-directory' ) . '</a>' : '' ) . '</div>'; // phpcs:ignore
 } );
