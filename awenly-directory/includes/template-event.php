@@ -9,13 +9,13 @@ get_header();
 while ( have_posts() ) :
 	the_post();
 	$id      = get_the_ID();
-	$start   = tribe_get_start_date( $id, false, 'U' );
-	$end     = tribe_get_end_date( $id, false, 'U' );
+	list( $sdt, $edt, $etz ) = awd_ev_times( $id );
 	$allday  = function_exists( 'tribe_event_is_all_day' ) && tribe_event_is_all_day( $id );
 	$past    = function_exists( 'tribe_is_past_event' ) && tribe_is_past_event( $id );
-	$same    = wp_date( 'Ymd', $start ) === wp_date( 'Ymd', $end );
-	$when    = $same ? wp_date( 'l, j F Y', $start ) : wp_date( 'j M', $start ) . ' – ' . wp_date( 'j M Y', $end );
-	$time    = $allday ? __( 'All day', 'awenly-directory' ) : wp_date( 'H:i', $start ) . ( $end > $start ? ' – ' . wp_date( 'H:i', $end ) : '' ) . ' ' . wp_date( 'T', $start );
+	$same    = $sdt->format( 'Ymd' ) === $edt->format( 'Ymd' );
+	$when    = $same ? $sdt->format( 'l, j F Y' ) : $sdt->format( 'j M' ) . ' – ' . $edt->format( 'j M Y' );
+	$home    = $allday ? '' : awd_ev_home_time( $sdt, $etz );
+	$time    = $allday ? __( 'All day', 'awenly-directory' ) : $sdt->format( 'H:i' ) . ( $edt > $sdt ? ' – ' . $edt->format( 'H:i' ) : '' ) . ' ' . $sdt->format( 'T' );
 	$venue   = function_exists( 'tribe_get_venue' ) ? trim( wp_strip_all_tags( (string) tribe_get_venue( $id ) ) ) : '';
 	$address = function_exists( 'tribe_get_full_address' ) ? trim( wp_strip_all_tags( (string) tribe_get_full_address( $id ) ) ) : '';
 	$where   = get_post_meta( $id, '_awenly_event_location', true );
@@ -33,7 +33,6 @@ while ( have_posts() ) :
 	$author  = (int) get_post_field( 'post_author', $id );
 	$host    = get_post_meta( $id, '_awd_member_event', true ) && $author ? get_userdata( $author ) : null;
 	$img     = get_the_post_thumbnail_url( $id, 'large' );
-	$share   = rawurlencode( get_permalink() );
 	$more    = tribe_get_events( array( 'posts_per_page' => 3, 'start_date' => 'now', 'post__not_in' => array( $id ) ) );
 	?>
 	<div class="awd-directory awd-evpage">
@@ -42,7 +41,7 @@ while ( have_posts() ) :
 				<a class="awd-event__back" href="<?php echo esc_url( awd_events_list_url() ); ?>">← <?php esc_html_e( 'All events', 'awenly-directory' ); ?></a>
 				<?php if ( $past ) : ?><div class="awd-event__past"><?php esc_html_e( 'This event has already taken place.', 'awenly-directory' ); ?> <a href="<?php echo esc_url( awd_events_list_url() ); ?>"><?php esc_html_e( 'See upcoming events', 'awenly-directory' ); ?> →</a></div><?php endif; ?>
 				<div class="awd-event__intro">
-					<span class="awd-ev-date awd-ev-date--lg"><small><?php echo esc_html( wp_date( 'M', $start ) ); ?></small><b><?php echo esc_html( wp_date( 'd', $start ) ); ?></b><small><?php echo esc_html( wp_date( 'D', $start ) ); ?></small></span>
+					<span class="awd-ev-date awd-ev-date--lg"><small><?php echo esc_html( $sdt->format( 'M' ) ); ?></small><b><?php echo esc_html( $sdt->format( 'd' ) ); ?></b><small><?php echo esc_html( $sdt->format( 'D' ) ); ?></small></span>
 					<div>
 						<div class="awd-event__chips">
 							<span class="awd-chip"><?php echo awd_icon( $online ? 'video' : 'pin' ); // phpcs:ignore ?><?php echo esc_html( $online ? __( 'Online', 'awenly-directory' ) : ( $where ? $where : __( 'Location to be confirmed', 'awenly-directory' ) ) ); ?></span>
@@ -50,7 +49,7 @@ while ( have_posts() ) :
 							<?php if ( $cats && ! is_wp_error( $cats ) ) : foreach ( $cats as $c ) : ?><a class="awd-chip awd-chip--soft" href="<?php echo esc_url( get_term_link( $c ) ); ?>"><?php echo esc_html( $c->name ); ?></a><?php endforeach; endif; ?>
 						</div>
 						<h1><?php the_title(); ?></h1>
-						<p class="awd-event__when"><?php echo awd_icon( 'cal' ); // phpcs:ignore ?> <?php echo esc_html( $when ); ?> · <?php echo esc_html( $time ); ?></p>
+						<p class="awd-event__when"><?php echo awd_icon( 'cal' ); // phpcs:ignore ?> <?php echo esc_html( $when ); ?> · <?php echo esc_html( $time ); ?><?php if ( $home ) : ?> <span class="awd-event__home">(<?php echo esc_html( $home ); ?>)</span><?php endif; ?></p>
 						<div class="awd-ev-actions">
 							<?php if ( $link && ! $past ) : ?><a class="awd-btn" href="<?php echo esc_url( $link ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'Book / more info', 'awenly-directory' ); ?></a><?php endif; ?>
 							<?php if ( ! $past && ( $gcal || $ical ) ) : ?>
@@ -58,13 +57,7 @@ while ( have_posts() ) :
 									<div><?php if ( $gcal ) : ?><a href="<?php echo esc_url( $gcal ); ?>" target="_blank" rel="noopener">Google Calendar</a><?php endif; ?><?php if ( $ical ) : ?><a href="<?php echo esc_url( $ical ); ?>">Apple / Outlook (.ics)</a><?php endif; ?></div>
 								</details>
 							<?php endif; ?>
-							<details class="awd-event__cal"><summary class="awd-btn awd-btn--ghost"><?php esc_html_e( 'Share', 'awenly-directory' ); ?></summary>
-								<div>
-									<a href="https://www.facebook.com/sharer/sharer.php?u=<?php echo esc_attr( $share ); ?>" target="_blank" rel="noopener">Facebook</a>
-									<a href="https://wa.me/?text=<?php echo esc_attr( rawurlencode( get_the_title() . ' ' ) . $share ); ?>" target="_blank" rel="noopener">WhatsApp</a>
-									<a href="mailto:?subject=<?php echo esc_attr( rawurlencode( get_the_title() ) ); ?>&amp;body=<?php echo esc_attr( $share ); ?>">E-mail</a>
-								</div>
-							</details>
+							<?php echo awd_ev_share_menu( wp_strip_all_tags( get_the_title() ), get_permalink() ); // phpcs:ignore ?>
 						</div>
 					</div>
 				</div>
@@ -76,15 +69,17 @@ while ( have_posts() ) :
 				<?php if ( $img ) : ?><figure class="awd-event__cover"><?php the_post_thumbnail( 'large' ); ?></figure><?php endif; ?>
 				<h2><?php esc_html_e( 'About this event', 'awenly-directory' ); ?></h2>
 				<div class="awd-event__content"><?php the_content(); ?></div>
+				<?php echo awd_ev_share_bar( wp_strip_all_tags( get_the_title() ), get_permalink() ); // phpcs:ignore ?>
 			</article>
 			<aside class="awd-event__side">
 				<div class="awd-event__box">
-					<div class="awd-event__row"><?php echo awd_icon( 'cal' ); // phpcs:ignore ?><div><strong><?php esc_html_e( 'Date and time', 'awenly-directory' ); ?></strong><span><?php echo esc_html( $when ); ?><br><?php echo esc_html( $time ); ?></span></div></div>
+					<div class="awd-event__row"><?php echo awd_icon( 'cal' ); // phpcs:ignore ?><div><strong><?php esc_html_e( 'Date and time', 'awenly-directory' ); ?></strong><span><?php echo esc_html( $when ); ?><br><?php echo esc_html( $time ); ?><?php if ( $home ) : ?><br><small><?php echo esc_html( $home ); ?></small><?php endif; ?></span></div></div>
 					<div class="awd-event__row"><?php echo awd_icon( $online ? 'video' : 'pin' ); // phpcs:ignore ?><div><strong><?php esc_html_e( 'Location', 'awenly-directory' ); ?></strong><span><?php echo esc_html( $where ? $where : ( $online ? __( 'Online', 'awenly-directory' ) : __( 'To be confirmed', 'awenly-directory' ) ) ); ?></span>
 						<?php if ( ! $online && $address ) : ?><a href="<?php echo esc_url( 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode( $address ) ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'Open in Maps', 'awenly-directory' ); ?></a><?php endif; ?></div></div>
 					<div class="awd-event__row"><?php echo awd_icon( 'tag' ); // phpcs:ignore ?><div><strong><?php esc_html_e( 'Price', 'awenly-directory' ); ?></strong><span><?php echo esc_html( $cost ? $cost : __( 'See booking link', 'awenly-directory' ) ); ?></span></div></div>
 					<?php if ( $link && ! $past ) : ?><a class="awd-btn awd-event__book" href="<?php echo esc_url( $link ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'Book / more info', 'awenly-directory' ); ?></a><?php endif; ?>
 				</div>
+				<?php echo awd_ev_join_box( $id, $past ); // phpcs:ignore ?>
 				<?php
 				$hosts = array();
 				if ( $listing && 'publish' === get_post_status( $listing ) ) {

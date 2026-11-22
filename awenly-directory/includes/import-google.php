@@ -43,14 +43,18 @@ function awd_gi_lines( $text ) {
 
 /** All "keyword in place" queries for one run. */
 function awd_gi_queries( $o ) {
-	$places = awd_gi_lines( $o['cities'] );
-	$places = $places ? array_map( function ( $c ) use ( $o ) {
-		return $o['country'] && false === stripos( $c, $o['country'] ) ? $c . ', ' . $o['country'] : $c;
-	}, $places ) : array( $o['country'] );
+	$countries = awd_gi_lines( $o['country'] );
+	$places    = awd_gi_lines( $o['cities'] );
+	$places    = $places ? array_map( function ( $c ) use ( $countries ) {
+		return 1 === count( $countries ) && false === strpos( $c, ',' ) ? $c . ', ' . $countries[0] : $c;
+	}, $places ) : ( $countries ? $countries : array( '' ) );
 	$q = array();
 	foreach ( awd_gi_lines( $o['keywords'] ) as $kw ) {
 		foreach ( $places as $p ) {
-			$q[] = array( 'kw' => $kw, 'q' => $p ? $kw . ' in ' . $p : $kw, 'place' => $p );
+			// "United States (online only)" → search "online <keyword>" there and keep online events only.
+			$ol = (bool) preg_match( '/\(\s*online( only)?\s*\)/i', $p );
+			$p  = trim( preg_replace( '/\(\s*online( only)?\s*\)/i', '', $p ) );
+			$q[] = array( 'kw' => $kw, 'q' => ( $ol ? 'online ' . $kw : $kw ) . ( $p ? ' in ' . $p : '' ), 'place' => $p, 'online_only' => $ol );
 		}
 	}
 	return $q;
@@ -182,6 +186,55 @@ function awd_gi_parse_when( $when, $start_date = '' ) {
 		$end = $ed > $sd ? $ed->setTime( 17, 0 ) : $start->modify( '+2 hours' );
 	}
 	return array( 'start' => $start, 'end' => $end, 'allday' => false );
+}
+
+/* ---------- time zones ---------- */
+
+/** Best-guess IANA time zone for an event from the searched place and its address. */
+function awd_gi_tz( $place, $addr ) {
+	$t = ' ' . $addr . ' ' . $place . ' ';
+	$us = array(
+		'America/Los_Angeles' => array( 'CA', 'WA', 'OR', 'NV' ),
+		'America/Denver'      => array( 'CO', 'UT', 'NM', 'MT', 'WY', 'ID' ),
+		'America/Phoenix'     => array( 'AZ' ),
+		'America/Chicago'     => array( 'TX', 'IL', 'MN', 'WI', 'MO', 'IA', 'LA', 'OK', 'KS', 'NE', 'AL', 'MS', 'AR', 'TN', 'SD', 'ND' ),
+		'America/Anchorage'   => array( 'AK' ),
+		'Pacific/Honolulu'    => array( 'HI' ),
+	);
+	if ( preg_match( '/,\s*([A-Z]{2})(?:\s+\d{5})?\s*(?:,|$|\s)/', $addr, $m ) ) {
+		foreach ( $us as $tz => $states ) {
+			if ( in_array( $m[1], $states, true ) ) {
+				return $tz;
+			}
+		}
+		if ( preg_match( '/united states|usa/i', $place ) ) {
+			return 'America/New_York';
+		}
+	}
+	$map = array(
+		'united kingdom|england|scotland|wales|london|northern ireland|belfast' => 'Europe/London',
+		'ireland|dublin|cork|galway|limerick'                                    => 'Europe/Dublin',
+		'united states|usa'                                                      => 'America/New_York',
+		'canada'                                                                 => 'America/Toronto',
+		'australia'                                                              => 'Australia/Sydney',
+		'new zealand'                                                            => 'Pacific/Auckland',
+		'poland'                                                                 => 'Europe/Warsaw',
+		'germany'                                                                => 'Europe/Berlin',
+		'netherlands'                                                            => 'Europe/Amsterdam',
+		'spain'                                                                  => 'Europe/Madrid',
+		'portugal'                                                               => 'Europe/Lisbon',
+		'france'                                                                 => 'Europe/Paris',
+		'italy'                                                                  => 'Europe/Rome',
+		'sweden'                                                                 => 'Europe/Stockholm',
+		'denmark'                                                                => 'Europe/Copenhagen',
+		'norway'                                                                 => 'Europe/Oslo',
+	);
+	foreach ( $map as $re => $tz ) {
+		if ( preg_match( '/' . $re . '/i', $t ) ) {
+			return $tz;
+		}
+	}
+	return wp_timezone_string();
 }
 
 /* ---------- import ---------- */
@@ -348,7 +401,9 @@ function awd_gi_run( $dry = false ) {
 				$why = 'no date';
 			} elseif ( $when['start'] < $today ) {
 				$why = 'in the past';
-			} elseif ( $is_ol && ! $o['online'] ) {
+			} elseif ( ! empty( $qq['online_only'] ) && ! $is_ol ) {
+				$why = 'in person (online only for this country)';
+			} elseif ( $is_ol && ! $o['online'] && empty( $qq['online_only'] ) ) {
 				$why = 'online event';
 			} elseif ( ! awd_gi_relevant( $title . ' ' . ( $e['type'] ?? '' ) . ' ' . ( $e['description'] ?? '' ), $words ) ) {
 				$why = 'not a wellbeing event';
@@ -378,6 +433,7 @@ function awd_gi_run( $dry = false ) {
 				'EventEndDate'     => $when['end']->format( 'Y-m-d' ),
 				'EventURL'         => esc_url_raw( $item['link'] ),
 				'EventCost'        => $e['price'] ?? '',
+				'EventTimezone'    => awd_gi_tz( $qq['place'], $addr ),
 			);
 			if ( $when['allday'] ) {
 				$args['EventAllDay'] = 'yes';
@@ -476,7 +532,7 @@ add_action( 'admin_post_awd_gimport', function () {
 		$o['key'] = '';
 	}
 	$o['keywords'] = implode( "\n", array_slice( awd_gi_lines( sanitize_textarea_field( $in['keywords'] ?? '' ) ), 0, 40 ) );
-	$o['country']  = sanitize_text_field( $in['country'] ?? '' );
+	$o['country']  = implode( "\n", array_slice( awd_gi_lines( sanitize_textarea_field( $in['country'] ?? '' ) ), 0, 10 ) );
 	$o['cities']   = implode( "\n", array_slice( awd_gi_lines( sanitize_textarea_field( $in['cities'] ?? '' ) ), 0, 20 ) );
 	$o['status']   = 'publish' === ( $in['status'] ?? '' ) ? 'publish' : 'draft';
 	$o['freq']     = in_array( $in['freq'] ?? '', array( 'off', 'daily', 'twicedaily', 'weekly', 'awd_3days' ), true ) ? $in['freq'] : 'off';
@@ -515,7 +571,7 @@ function awd_gi_page() {
 	?>
 	<div class="wrap">
 		<h1>Import events from Google</h1>
-		<p style="max-width:780px">Searches Google's events listings for each <strong>keyword</strong> in your <strong>country</strong> (or each city), and adds new upcoming events to the calendar with a short summary and a <em>Book / more info</em> link to the organiser. Events already on the site, past events and duplicates are skipped. Uses <a href="https://serpapi.com/google-events-api" target="_blank" rel="noopener">SerpApi</a> — check your plan's monthly searches and set the limit below.</p>
+		<p style="max-width:780px">Searches Google's events listings for each <strong>keyword</strong> in each <strong>country</strong> (or each city), and adds new upcoming events to the calendar with a short summary and a <em>Book / more info</em> link to the organiser. Events already on the site, past events and duplicates are skipped. Uses <a href="https://serpapi.com/google-events-api" target="_blank" rel="noopener">SerpApi</a> — check your plan's monthly searches and set the limit below.</p>
 		<?php if ( 'saved' === $msg ) : ?><div class="notice notice-success is-dismissible"><p>Settings saved.</p></div><?php endif; ?>
 		<?php if ( $waiting ) : ?>
 			<div class="notice notice-info"><p><strong><?php echo (int) $waiting; ?></strong> imported events are waiting as drafts. <a href="<?php echo esc_url( admin_url( 'edit.php?post_type=tribe_events&post_status=draft' ) ); ?>">Review and publish them</a>.</p></div>
@@ -550,9 +606,9 @@ function awd_gi_page() {
 					<textarea id="gi-kw" name="keywords" rows="7" class="large-text" style="max-width:420px"><?php echo esc_textarea( $o['keywords'] ); ?></textarea>
 					<p class="description">One per line, e.g. <code>sound bath</code>, <code>reiki</code>, <code>breathwork</code>. The matching event category is chosen automatically.</p>
 				</td></tr>
-				<tr><th><label for="gi-country">Country</label></th><td>
-					<input id="gi-country" name="country" list="gi-countries" class="regular-text" value="<?php echo esc_attr( $o['country'] ); ?>">
-					<datalist id="gi-countries"><?php foreach ( array( 'Ireland', 'United Kingdom', 'Poland', 'United States', 'Canada', 'Australia', 'New Zealand', 'Germany', 'Netherlands', 'Spain', 'Portugal', 'France', 'Italy', 'Sweden', 'Denmark', 'Norway' ) as $c ) : ?><option value="<?php echo esc_attr( $c ); ?>"><?php endforeach; ?></datalist>
+				<tr><th><label for="gi-country">Countries</label></th><td>
+					<textarea id="gi-country" name="country" rows="3" class="large-text" style="max-width:420px"><?php echo esc_textarea( $o['country'] ); ?></textarea>
+					<p class="description">One per line, in English, e.g. <code>Ireland</code>, <code>United Kingdom</code>, <code>United States</code>. Add <code>(online only)</code> to import only online events from a country, e.g. <code>United States (online only)</code>. Each keyword is searched in each country. Event times use the event's local time zone.</p>
 				</td></tr>
 				<tr><th><label for="gi-cities">Cities <span style="font-weight:400">(optional)</span></label></th><td>
 					<textarea id="gi-cities" name="cities" rows="4" class="large-text" style="max-width:420px" placeholder="Dublin&#10;Cork&#10;Galway"><?php echo esc_textarea( $o['cities'] ); ?></textarea>
@@ -695,3 +751,30 @@ add_action( 'init', function () {
 	wp_clear_scheduled_hook( AWD_GI_HOOK );
 	wp_schedule_event( time() + DAY_IN_SECONDS, 'awd_3days', AWD_GI_HOOK );
 }, 32 );
+
+/* One-time (1.7.6): Ireland + United Kingdom + United States, weekly. */
+add_action( 'init', function () {
+	if ( (int) get_option( 'awd_gi_fix_v' ) !== 3 || get_transient( 'awd_gi_fix_lock' ) ) {
+		return;
+	}
+	update_option( 'awd_gi_fix_v', 4, false );
+	$o            = awd_gi_get();
+	$o['country'] = "Ireland\nUnited Kingdom\nUnited States";
+	$o['cities']  = '';
+	$o['freq']    = 'weekly';
+	$o['max_new'] = max( 40, (int) $o['max_new'] );
+	update_option( AWD_GI_OPT, $o, false );
+	wp_clear_scheduled_hook( AWD_GI_HOOK );
+	wp_schedule_event( time() + DAY_IN_SECONDS, 'weekly', AWD_GI_HOOK );
+}, 33 );
+
+/* One-time (1.7.7): United States online only. */
+add_action( 'init', function () {
+	if ( (int) get_option( 'awd_gi_fix_v' ) !== 4 || get_transient( 'awd_gi_fix_lock' ) ) {
+		return;
+	}
+	update_option( 'awd_gi_fix_v', 5, false );
+	$o            = awd_gi_get();
+	$o['country'] = preg_replace( '/^United States\s*$/m', 'United States (online only)', $o['country'] );
+	update_option( AWD_GI_OPT, $o, false );
+}, 34 );

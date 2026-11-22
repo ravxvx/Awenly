@@ -144,6 +144,10 @@ add_action( 'init', function () {
 		wp_safe_redirect( add_query_arg( 'awd_ev', 'error', $back ) );
 		exit;
 	}
+	$join = function_exists( 'awd_ev_clean_join_link' ) ? awd_ev_clean_join_link( wp_unslash( $_POST['awd_ev_join'] ?? '' ) ) : '';
+	if ( $join ) {
+		update_post_meta( $res, '_awd_online_link', $join );
+	}
 	awd_event_attach_image( $res );
 	wp_safe_redirect( add_query_arg( 'awd_ev', 'sent', awd_my_events_url() ) );
 	exit;
@@ -244,6 +248,7 @@ add_shortcode( 'awenly_event_form', function () {
 				<label class="awd-field"><span><?php esc_html_e( 'Category', 'awenly-directory' ); ?></span><select name="awd_ev_cat"><option value="0"><?php esc_html_e( '- choose -', 'awenly-directory' ); ?></option><?php foreach ( $cats as $c ) : ?><option value="<?php echo (int) $c->term_id; ?>"><?php echo esc_html( $c->name ); ?></option><?php endforeach; ?></select></label>
 			<?php endif; ?>
 			<label class="awd-field"><span><?php esc_html_e( 'Booking or info link', 'awenly-directory' ); ?></span><input type="url" name="awd_ev_link" placeholder="https://"></label>
+			<label class="awd-field"><span><?php esc_html_e( 'Online joining link (Zoom, Meet, Teams)', 'awenly-directory' ); ?></span><input type="url" name="awd_ev_join" placeholder="https://zoom.us/j/…"><small><?php esc_html_e( 'Only signed-in members will see it.', 'awenly-directory' ); ?></small></label>
 			<label class="awd-field awd-field--wide"><span><?php esc_html_e( 'Description *', 'awenly-directory' ); ?></span><textarea name="awd_ev_desc" rows="6" required placeholder="<?php esc_attr_e( 'What will happen, who it is for, what to bring...', 'awenly-directory' ); ?>"></textarea></label>
 			<label class="awd-field awd-field--wide"><span><?php esc_html_e( 'Cover image (JPG, PNG or WebP, max 5 MB)', 'awenly-directory' ); ?></span><input type="file" name="awd_ev_image" accept="image/jpeg,image/png,image/webp"></label>
 		</div>
