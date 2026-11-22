@@ -544,3 +544,5 @@ body.page-id-438 .elementor-widget-text-editor { font-family: "Poppins", system-
 	.awd-event__intro { grid-template-columns: 1fr; } .awd-ev-date--lg { display: none; }
 	.awd-event__body { padding: 22px 18px; } .awd-event__cover { margin: -22px -18px 20px; }
 }
+.awd-ev-h1 { margin: 6px 0 6px; font-family: "Poppins", system-ui, sans-serif; font-size: clamp(28px, 3.4vw, 42px); font-weight: 700; color: #2b1356; letter-spacing: -.02em; line-height: 1.1; }
+.awd-ev-lead { margin: 0 0 16px; color: #4e4766; font-size: 16px; }
