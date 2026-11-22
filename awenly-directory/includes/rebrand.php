@@ -10,7 +10,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const AWD_REBRAND_VERSION = 2;
+const AWD_REBRAND_VERSION = 3;
+const AWD_PUBLIC_EMAIL = 'awenlycircle@gmail.com';
 
 /** Replace the old brand in a string. Leaves e-mail addresses, file names and slugs (linkin-events-...) alone. */
 function awd_rebrand_text( $s ) {
@@ -26,6 +27,19 @@ function awd_rebrand_text( $s ) {
 	$s = preg_replace( '~(?<![@/\w.-])(?:www\.)?LinkIn\s?Events\.net(?![\w-])~i', 'Awenly Circle', $s );
 	$s = preg_replace( '~(?<![@/\w.-])LinkIn ?Events(?![\w-]|\.(?:net|com|png|jpe?g|webp|gif|svg)\b)~i', 'Awenly Circle', $s );
 	return $s;
+}
+
+/** Public contact e-mail: old @linkinevents.net addresses shown to visitors / Google -> the Awenly address. */
+function awd_rebrand_email( $v ) {
+	if ( is_string( $v ) ) {
+		return preg_replace( '~\b[a-z0-9._%+-]+@(?:www\.)?linkinevents\.net\b~i', AWD_PUBLIC_EMAIL, $v );
+	}
+	if ( is_array( $v ) ) {
+		foreach ( $v as $k => $x ) {
+			$v[ $k ] = awd_rebrand_email( $x );
+		}
+	}
+	return $v;
 }
 
 function awd_rebrand_deep( $v ) {
@@ -47,7 +61,7 @@ function awd_rebrand_run() {
 	// posts (all types, incl. pages, blog posts, GamiPress badges/levels/requirements, forums, events)
 	$rows = $wpdb->get_results( "SELECT ID, post_title, post_content, post_excerpt FROM {$wpdb->posts} WHERE post_type NOT IN ('revision') AND (post_title LIKE '%linkin%' OR post_content LIKE '%linkin%' OR post_excerpt LIKE '%linkin%')" );
 	foreach ( $rows as $r ) {
-		$new = array( 'post_title' => awd_rebrand_text( $r->post_title ), 'post_content' => awd_rebrand_text( $r->post_content ), 'post_excerpt' => awd_rebrand_text( $r->post_excerpt ) );
+		$new = array( 'post_title' => awd_rebrand_text( $r->post_title ), 'post_content' => awd_rebrand_email( awd_rebrand_text( $r->post_content ) ), 'post_excerpt' => awd_rebrand_text( $r->post_excerpt ) );
 		if ( $new['post_title'] !== $r->post_title || $new['post_content'] !== $r->post_content || $new['post_excerpt'] !== $r->post_excerpt ) {
 			$wpdb->update( $wpdb->posts, $new, array( 'ID' => $r->ID ) );
 			clean_post_cache( (int) $r->ID );
@@ -147,6 +161,9 @@ function awd_rebrand_run() {
 			continue;
 		}
 		$new = awd_rebrand_deep( $val );
+		if ( 0 === strpos( $opt, 'rank-math' ) ) {
+			$new = awd_rebrand_email( $new );
+		}
 		if ( 'rank-math-options-titles' === $opt && is_array( $new ) ) {
 			if ( empty( $new['knowledgegraph_name'] ) || false !== stripos( (string) $new['knowledgegraph_name'], 'linkin' ) ) {
 				$new['knowledgegraph_name'] = 'Awenly Circle';
@@ -191,7 +208,7 @@ add_action( 'init', function () {
 
 /* Rank Math schema: never publish the old brand or the old Facebook page as the organisation. */
 add_filter( 'rank_math/json_ld', function ( $data ) {
-	return awd_rebrand_deep( $data );
+	return awd_rebrand_email( awd_rebrand_deep( $data ) );
 }, 999 );
 
 /* Admin notice with the summary (visible once to admins). */
