@@ -21,7 +21,8 @@ function awd_gi_defaults() {
 		'keywords' => "sound bath\nreiki\nbreathwork\nmeditation workshop\nyoga retreat\nhealing circle\nwellbeing workshop",
 		'country'  => 'Ireland',
 		'cities'   => '',
-		'status'   => 'draft',
+		'status'   => 'publish',
+		'autodel'  => 1,
 		'freq'     => 'off',
 		'max_new'  => 20,
 		'cat'      => 0,
@@ -413,11 +414,12 @@ function awd_gi_run( $dry = false ) {
 	return $log;
 }
 
-/** Bin imported drafts whose date has passed (nobody approved them in time). */
+/** Bin imported events that have ended (published ones only when auto-remove is on). */
 function awd_gi_cleanup() {
+	$o   = awd_gi_get();
 	$old = get_posts( array(
 		'post_type'      => 'tribe_events',
-		'post_status'    => 'draft',
+		'post_status'    => $o['autodel'] ? array( 'publish', 'draft', 'pending' ) : array( 'draft' ),
 		'fields'         => 'ids',
 		'posts_per_page' => 100,
 		'meta_query'     => array(
@@ -462,6 +464,7 @@ add_action( 'admin_post_awd_gimport', function () {
 	$o['cat']      = (int) ( $in['cat'] ?? 0 );
 	$o['online']   = empty( $in['online'] ) ? 0 : 1;
 	$o['images']   = empty( $in['images'] ) ? 0 : 1;
+	$o['autodel']  = empty( $in['autodel'] ) ? 0 : 1;
 	$prev_freq = awd_gi_get()['freq'];
 	update_option( AWD_GI_OPT, $o, false );
 	if ( $prev_freq !== $o['freq'] || ( 'off' !== $o['freq'] && ! wp_next_scheduled( AWD_GI_HOOK ) ) ) {
@@ -535,8 +538,9 @@ function awd_gi_page() {
 					<p class="description">Leave empty to search the whole country. With cities, each keyword is searched in each city — more events, but more searches.</p>
 				</td></tr>
 				<tr><th>New events</th><td>
-					<label><input type="radio" name="status" value="draft" <?php checked( 'draft', $o['status'] ); ?>> Save as drafts for me to approve <em>(recommended)</em></label><br>
-					<label><input type="radio" name="status" value="publish" <?php checked( 'publish', $o['status'] ); ?>> Publish straight away</label><br>
+					<label><input type="radio" name="status" value="publish" <?php checked( 'publish', $o['status'] ); ?>> Publish automatically <em>(only events that match a wellbeing word)</em></label><br>
+					<label><input type="radio" name="status" value="draft" <?php checked( 'draft', $o['status'] ); ?>> Save as drafts for me to approve</label><br>
+					<label><input type="checkbox" name="autodel" value="1" <?php checked( 1, (int) $o['autodel'] ); ?>> Remove imported events automatically once they have ended <em>(their address redirects to the calendar)</em></label><br>
 					<label style="display:inline-block;margin-top:6px">At most <input name="max_new" type="number" min="1" max="100" value="<?php echo (int) $o['max_new']; ?>" style="width:70px"> new events per run</label>
 				</td></tr>
 				<tr><th><label for="gi-cat">Fallback category</label></th><td>
@@ -608,3 +612,40 @@ add_action( 'init', function () {
 	}
 	delete_transient( 'awd_gi_fix_lock' );
 }, 30 );
+
+/* Daily housekeeping, independent of the import schedule. */
+add_action( 'init', function () {
+	if ( ! wp_next_scheduled( 'awd_gi_cleanup_cron' ) ) {
+		wp_schedule_event( strtotime( 'tomorrow 03:17' ), 'daily', 'awd_gi_cleanup_cron' );
+	}
+} );
+add_action( 'awd_gi_cleanup_cron', 'awd_gi_cleanup' );
+
+/* A removed event's address sends visitors (and Google) to the calendar instead of a 404. */
+add_action( 'template_redirect', function () {
+	if ( is_404() && preg_match( '#^/event/[^/]+/?$#', (string) wp_parse_url( $_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH ) ) ) {
+		wp_safe_redirect( home_url( '/events/' ), 301 );
+		exit;
+	}
+}, 2 );
+
+/* One-time (1.7.4): switch to fully automatic mode and bin the off-topic drafts. */
+add_action( 'init', function () {
+	if ( (int) get_option( 'awd_gi_fix_v' ) >= 2 || get_transient( 'awd_gi_fix_lock' ) || ! post_type_exists( 'tribe_events' ) || (int) get_option( 'awd_gi_fix_v' ) < 1 ) {
+		return;
+	}
+	set_transient( 'awd_gi_fix_lock', 1, 5 * MINUTE_IN_SECONDS );
+	update_option( 'awd_gi_fix_v', 2, false );
+	$o            = awd_gi_get();
+	$o['status']  = 'publish';
+	$o['autodel'] = 1;
+	update_option( AWD_GI_OPT, $o, false );
+	$words = awd_gi_topic_words( $o['keywords'] );
+	foreach ( get_posts( array( 'post_type' => 'tribe_events', 'post_status' => 'draft', 'fields' => 'ids', 'posts_per_page' => 200, 'meta_key' => '_awd_imported', 'meta_value' => 'google' ) ) as $id ) {
+		if ( ! awd_gi_relevant( get_the_title( $id ), $words ) ) {
+			wp_trash_post( $id );
+		}
+	}
+	awd_gi_cleanup();
+	delete_transient( 'awd_gi_fix_lock' );
+}, 31 );
