@@ -441,3 +441,47 @@ body.page-id-438 .elementor-widget-text-editor { font-family: "Poppins", system-
 	.awd-contact-main { order: -1; padding: 24px 20px; }
 	.awd-contact-main .awd-btn { width: 100%; }
 }
+
+/* 1.4.0 - member events + about page */
+.awd-ev { max-width: 980px; margin: 0 auto; }
+.awd-ev-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.awd-ev-head h2 { margin: 0 0 4px; font-size: clamp(24px, 2.6vw, 32px); }
+.awd-ev-form { background: #fff; border: 1px solid var(--awd-line); border-radius: 20px; padding: 26px; box-shadow: var(--awd-shadow); }
+.awd-ev-mode { display: flex; gap: 18px; padding-top: 6px; }
+.awd-ev-mode label { display: inline-flex; align-items: center; gap: 7px; font-weight: 500; cursor: pointer; }
+.awd-hp { position: absolute !important; left: -9999px !important; height: 1px; overflow: hidden; }
+.awd-ev-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.awd-ev-guest, .awd-ev-empty { background: #fff; border: 1px dashed var(--awd-line); border-radius: 18px; padding: 28px; text-align: center; }
+.awd-ev-guest .awd-ev-actions { justify-content: center; margin-top: 12px; }
+.awd-ev-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.awd-ev-item { display: grid; grid-template-columns: 62px 1fr auto auto; gap: 16px; align-items: center; background: #fff; border: 1px solid var(--awd-line); border-radius: 16px; padding: 14px 18px; box-shadow: var(--awd-shadow); }
+.awd-ev-date { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 14px; background: var(--awd-soft); color: var(--awd-purple); line-height: 1.05; text-align: center; }
+.awd-ev-date b { font-size: 22px; } .awd-ev-date small { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.awd-ev-main strong { display: block; font-size: 16px; } .awd-ev-main strong a { color: inherit; text-decoration: none; }
+.awd-ev-main small { color: var(--awd-muted, #6b6480); }
+.awd-ev-btns { display: flex; gap: 6px; } .awd-ev-btns form { margin: 0; }
+.awd-ev-banner { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; padding: 26px 30px; margin-bottom: 20px; border-radius: 20px; background: linear-gradient(135deg, #fbf8ff, #f1ebff); border: 1px solid var(--awd-line); }
+.awd-ev-banner h2 { margin: 0 0 4px; } .awd-ev-banner p { margin: 0; }
+.awd-ev-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 18px; padding: 14px 18px; border-radius: 14px; background: #f6f1ff; border: 1px solid #e6dafc; font-weight: 600; }
+.awd-ev-bar span { flex: 1; }
+.awd-about-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin: -30px 0 40px; position: relative; }
+.awd-about-stats div { background: #fff; border: 1px solid var(--awd-line); border-radius: 18px; padding: 20px 22px; box-shadow: var(--awd-shadow); }
+.awd-about-stats b { display: block; font-size: 32px; line-height: 1; color: var(--awd-purple); }
+.awd-about-stats span { color: var(--awd-muted, #6b6480); font-size: 14px; }
+.awd-about-block { margin: 0 0 48px; }
+.awd-about-block h2 { margin: 0 0 18px; font-size: clamp(26px, 3vw, 36px); }
+.awd-about-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.awd-about-split { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 36px; align-items: start; }
+.awd-about-list { margin: 14px 0 22px; padding-left: 0; list-style: none; }
+.awd-about-list li { padding: 6px 0 6px 28px; position: relative; }
+.awd-about-list li:before { content: "✓"; position: absolute; left: 0; top: 6px; width: 20px; height: 20px; border-radius: 50%; background: #f1fbd4; color: #3d5200; font-size: 12px; font-weight: 700; display: grid; place-items: center; }
+.awd-about-values { display: flex; flex-direction: column; gap: 12px; }
+.awd-about-value { display: flex; gap: 14px; background: #fff; border: 1px solid var(--awd-line); border-radius: 16px; padding: 16px 18px; }
+.awd-about-value strong { display: block; } .awd-about-value p { margin: 2px 0 0; font-size: 14px; }
+.awd-about-hero { padding-bottom: 70px; }
+@media (max-width: 760px) {
+	.awd-ev-item { grid-template-columns: 54px 1fr; }
+	.awd-ev-item > .awd-status--live, .awd-ev-item > .awd-status--pending, .awd-ev-item > .awd-status--hidden, .awd-ev-btns { grid-column: 2; }
+	.awd-about-split { grid-template-columns: 1fr; }
+	.awd-ev-form { padding: 18px; }
+}
