@@ -23,6 +23,7 @@ function awd_gi_defaults() {
 		'cities'   => '',
 		'status'   => 'publish',
 		'autodel'  => 1,
+		'limit'    => 200,
 		'freq'     => 'off',
 		'max_new'  => 20,
 		'cat'      => 0,
@@ -42,29 +43,47 @@ function awd_gi_lines( $text ) {
 
 /** All "keyword in place" queries for one run. */
 function awd_gi_queries( $o ) {
-	$places = awd_gi_lines( $o['cities'] );
-	$places = $places ? array_map( function ( $c ) use ( $o ) {
-		return $o['country'] && false === stripos( $c, $o['country'] ) ? $c . ', ' . $o['country'] : $c;
-	}, $places ) : array( $o['country'] );
+	$countries = awd_gi_lines( $o['country'] );
+	$places    = awd_gi_lines( $o['cities'] );
+	$places    = $places ? array_map( function ( $c ) use ( $countries ) {
+		return 1 === count( $countries ) && false === strpos( $c, ',' ) ? $c . ', ' . $countries[0] : $c;
+	}, $places ) : ( $countries ? $countries : array( '' ) );
 	$q = array();
 	foreach ( awd_gi_lines( $o['keywords'] ) as $kw ) {
 		foreach ( $places as $p ) {
-			$q[] = array( 'kw' => $kw, 'q' => $p ? $kw . ' in ' . $p : $kw, 'place' => $p );
+			// "United States (online only)" → search "online <keyword>" there and keep online events only.
+			$ol = (bool) preg_match( '/\(\s*online( only)?\s*\)/i', $p );
+			$p  = trim( preg_replace( '/\(\s*online( only)?\s*\)/i', '', $p ) );
+			$q[] = array( 'kw' => $kw, 'q' => ( $ol ? 'online ' . $kw : $kw ) . ( $p ? ' in ' . $p : '' ), 'place' => $p, 'online_only' => $ol );
 		}
 	}
 	return $q;
 }
 
 function awd_gi_runs_per_month( $freq ) {
-	return array( 'daily' => 30, 'twicedaily' => 60, 'weekly' => 4 )[ $freq ] ?? 0;
+	return array( 'daily' => 30, 'twicedaily' => 60, 'weekly' => 4, 'awd_3days' => 10 )[ $freq ] ?? 0;
+}
+
+add_filter( 'cron_schedules', function ( $s ) {
+	$s['awd_3days'] = array( 'interval' => 3 * DAY_IN_SECONDS, 'display' => 'Every 3 days' );
+	return $s;
+} );
+
+/** Searches used this calendar month (counted by the plugin, including tests). */
+function awd_gi_used() {
+	$u = get_option( 'awd_gi_used', array() );
+	return ( $u['month'] ?? '' ) === gmdate( 'Y-m' ) ? (int) $u['n'] : 0;
+}
+function awd_gi_count( $n ) {
+	update_option( 'awd_gi_used', array( 'month' => gmdate( 'Y-m' ), 'n' => awd_gi_used() + (int) $n ), false );
 }
 
 /* ---------- schedule ---------- */
 
 function awd_gi_reschedule( $freq ) {
 	wp_clear_scheduled_hook( AWD_GI_HOOK );
-	if ( in_array( $freq, array( 'daily', 'twicedaily', 'weekly' ), true ) ) {
-		wp_schedule_event( time() + ( 'weekly' === $freq ? DAY_IN_SECONDS : HOUR_IN_SECONDS ), $freq, AWD_GI_HOOK );
+	if ( in_array( $freq, array( 'daily', 'twicedaily', 'weekly', 'awd_3days' ), true ) ) {
+		wp_schedule_event( time() + ( in_array( $freq, array( 'weekly', 'awd_3days' ), true ) ? DAY_IN_SECONDS : HOUR_IN_SECONDS ), $freq, AWD_GI_HOOK );
 	}
 }
 add_action( AWD_GI_HOOK, function () {
@@ -167,6 +186,55 @@ function awd_gi_parse_when( $when, $start_date = '' ) {
 		$end = $ed > $sd ? $ed->setTime( 17, 0 ) : $start->modify( '+2 hours' );
 	}
 	return array( 'start' => $start, 'end' => $end, 'allday' => false );
+}
+
+/* ---------- time zones ---------- */
+
+/** Best-guess IANA time zone for an event from the searched place and its address. */
+function awd_gi_tz( $place, $addr ) {
+	$t = ' ' . $addr . ' ' . $place . ' ';
+	$us = array(
+		'America/Los_Angeles' => array( 'CA', 'WA', 'OR', 'NV' ),
+		'America/Denver'      => array( 'CO', 'UT', 'NM', 'MT', 'WY', 'ID' ),
+		'America/Phoenix'     => array( 'AZ' ),
+		'America/Chicago'     => array( 'TX', 'IL', 'MN', 'WI', 'MO', 'IA', 'LA', 'OK', 'KS', 'NE', 'AL', 'MS', 'AR', 'TN', 'SD', 'ND' ),
+		'America/Anchorage'   => array( 'AK' ),
+		'Pacific/Honolulu'    => array( 'HI' ),
+	);
+	if ( preg_match( '/,\s*([A-Z]{2})(?:\s+\d{5})?\s*(?:,|$|\s)/', $addr, $m ) ) {
+		foreach ( $us as $tz => $states ) {
+			if ( in_array( $m[1], $states, true ) ) {
+				return $tz;
+			}
+		}
+		if ( preg_match( '/united states|usa/i', $place ) ) {
+			return 'America/New_York';
+		}
+	}
+	$map = array(
+		'united kingdom|england|scotland|wales|london|northern ireland|belfast' => 'Europe/London',
+		'ireland|dublin|cork|galway|limerick'                                    => 'Europe/Dublin',
+		'united states|usa'                                                      => 'America/New_York',
+		'canada'                                                                 => 'America/Toronto',
+		'australia'                                                              => 'Australia/Sydney',
+		'new zealand'                                                            => 'Pacific/Auckland',
+		'poland'                                                                 => 'Europe/Warsaw',
+		'germany'                                                                => 'Europe/Berlin',
+		'netherlands'                                                            => 'Europe/Amsterdam',
+		'spain'                                                                  => 'Europe/Madrid',
+		'portugal'                                                               => 'Europe/Lisbon',
+		'france'                                                                 => 'Europe/Paris',
+		'italy'                                                                  => 'Europe/Rome',
+		'sweden'                                                                 => 'Europe/Stockholm',
+		'denmark'                                                                => 'Europe/Copenhagen',
+		'norway'                                                                 => 'Europe/Oslo',
+	);
+	foreach ( $map as $re => $tz ) {
+		if ( preg_match( '/' . $re . '/i', $t ) ) {
+			return $tz;
+		}
+	}
+	return wp_timezone_string();
 }
 
 /* ---------- import ---------- */
@@ -299,9 +367,14 @@ function awd_gi_run( $dry = false ) {
 		if ( ! $dry && $log['new'] >= (int) $o['max_new'] ) {
 			break;
 		}
+		if ( awd_gi_used() >= (int) $o['limit'] ) {
+			$log['errors'][] = 'Monthly search limit (' . (int) $o['limit'] . ') reached — the import continues next month.';
+			break;
+		}
 		$dbg = array();
 		$res = awd_gi_search( $o['key'], $qq['q'], $qq['place'], $dbg );
 		$log['searches'] += count( $dbg );
+		awd_gi_count( count( $dbg ) );
 		if ( $dry ) {
 			$log['debug'] = array_merge( $log['debug'] ?? array(), array_map( function ( $d ) use ( $qq ) {
 				return '"' . $qq['q'] . '" ' . $d;
@@ -328,7 +401,9 @@ function awd_gi_run( $dry = false ) {
 				$why = 'no date';
 			} elseif ( $when['start'] < $today ) {
 				$why = 'in the past';
-			} elseif ( $is_ol && ! $o['online'] ) {
+			} elseif ( ! empty( $qq['online_only'] ) && ! $is_ol ) {
+				$why = 'in person (online only for this country)';
+			} elseif ( $is_ol && ! $o['online'] && empty( $qq['online_only'] ) ) {
 				$why = 'online event';
 			} elseif ( ! awd_gi_relevant( $title . ' ' . ( $e['type'] ?? '' ) . ' ' . ( $e['description'] ?? '' ), $words ) ) {
 				$why = 'not a wellbeing event';
@@ -358,6 +433,7 @@ function awd_gi_run( $dry = false ) {
 				'EventEndDate'     => $when['end']->format( 'Y-m-d' ),
 				'EventURL'         => esc_url_raw( $item['link'] ),
 				'EventCost'        => $e['price'] ?? '',
+				'EventTimezone'    => awd_gi_tz( $qq['place'], $addr ),
 			);
 			if ( $when['allday'] ) {
 				$args['EventAllDay'] = 'yes';
@@ -456,10 +532,11 @@ add_action( 'admin_post_awd_gimport', function () {
 		$o['key'] = '';
 	}
 	$o['keywords'] = implode( "\n", array_slice( awd_gi_lines( sanitize_textarea_field( $in['keywords'] ?? '' ) ), 0, 40 ) );
-	$o['country']  = sanitize_text_field( $in['country'] ?? '' );
+	$o['country']  = implode( "\n", array_slice( awd_gi_lines( sanitize_textarea_field( $in['country'] ?? '' ) ), 0, 10 ) );
 	$o['cities']   = implode( "\n", array_slice( awd_gi_lines( sanitize_textarea_field( $in['cities'] ?? '' ) ), 0, 20 ) );
 	$o['status']   = 'publish' === ( $in['status'] ?? '' ) ? 'publish' : 'draft';
-	$o['freq']     = in_array( $in['freq'] ?? '', array( 'off', 'daily', 'twicedaily', 'weekly' ), true ) ? $in['freq'] : 'off';
+	$o['freq']     = in_array( $in['freq'] ?? '', array( 'off', 'daily', 'twicedaily', 'weekly', 'awd_3days' ), true ) ? $in['freq'] : 'off';
+	$o['limit']    = max( 1, min( 100000, (int) ( $in['limit'] ?? 200 ) ) );
 	$o['max_new']  = max( 1, min( 100, (int) ( $in['max_new'] ?? 20 ) ) );
 	$o['cat']      = (int) ( $in['cat'] ?? 0 );
 	$o['online']   = empty( $in['online'] ) ? 0 : 1;
@@ -494,7 +571,7 @@ function awd_gi_page() {
 	?>
 	<div class="wrap">
 		<h1>Import events from Google</h1>
-		<p style="max-width:780px">Searches Google's events listings for each <strong>keyword</strong> in your <strong>country</strong> (or each city), and adds new upcoming events to the calendar with a short summary and a <em>Book / more info</em> link to the organiser. Events already on the site, past events and duplicates are skipped. Uses <a href="https://serpapi.com/google-events-api" target="_blank" rel="noopener">SerpApi</a> — the free plan includes 100 searches a month.</p>
+		<p style="max-width:780px">Searches Google's events listings for each <strong>keyword</strong> in each <strong>country</strong> (or each city), and adds new upcoming events to the calendar with a short summary and a <em>Book / more info</em> link to the organiser. Events already on the site, past events and duplicates are skipped. Uses <a href="https://serpapi.com/google-events-api" target="_blank" rel="noopener">SerpApi</a> — check your plan's monthly searches and set the limit below.</p>
 		<?php if ( 'saved' === $msg ) : ?><div class="notice notice-success is-dismissible"><p>Settings saved.</p></div><?php endif; ?>
 		<?php if ( $waiting ) : ?>
 			<div class="notice notice-info"><p><strong><?php echo (int) $waiting; ?></strong> imported events are waiting as drafts. <a href="<?php echo esc_url( admin_url( 'edit.php?post_type=tribe_events&post_status=draft' ) ); ?>">Review and publish them</a>.</p></div>
@@ -529,9 +606,9 @@ function awd_gi_page() {
 					<textarea id="gi-kw" name="keywords" rows="7" class="large-text" style="max-width:420px"><?php echo esc_textarea( $o['keywords'] ); ?></textarea>
 					<p class="description">One per line, e.g. <code>sound bath</code>, <code>reiki</code>, <code>breathwork</code>. The matching event category is chosen automatically.</p>
 				</td></tr>
-				<tr><th><label for="gi-country">Country</label></th><td>
-					<input id="gi-country" name="country" list="gi-countries" class="regular-text" value="<?php echo esc_attr( $o['country'] ); ?>">
-					<datalist id="gi-countries"><?php foreach ( array( 'Ireland', 'United Kingdom', 'Poland', 'United States', 'Canada', 'Australia', 'New Zealand', 'Germany', 'Netherlands', 'Spain', 'Portugal', 'France', 'Italy', 'Sweden', 'Denmark', 'Norway' ) as $c ) : ?><option value="<?php echo esc_attr( $c ); ?>"><?php endforeach; ?></datalist>
+				<tr><th><label for="gi-country">Countries</label></th><td>
+					<textarea id="gi-country" name="country" rows="3" class="large-text" style="max-width:420px"><?php echo esc_textarea( $o['country'] ); ?></textarea>
+					<p class="description">One per line, in English, e.g. <code>Ireland</code>, <code>United Kingdom</code>, <code>United States</code>. Add <code>(online only)</code> to import only online events from a country, e.g. <code>United States (online only)</code>. Each keyword is searched in each country. Event times use the event's local time zone.</p>
 				</td></tr>
 				<tr><th><label for="gi-cities">Cities <span style="font-weight:400">(optional)</span></label></th><td>
 					<textarea id="gi-cities" name="cities" rows="4" class="large-text" style="max-width:420px" placeholder="Dublin&#10;Cork&#10;Galway"><?php echo esc_textarea( $o['cities'] ); ?></textarea>
@@ -553,13 +630,17 @@ function awd_gi_page() {
 				</td></tr>
 				<tr><th><label for="gi-freq">Run automatically</label></th><td>
 					<select id="gi-freq" name="freq">
-						<?php foreach ( array( 'off' => 'Off — only when I click Import now', 'weekly' => 'Weekly', 'daily' => 'Daily', 'twicedaily' => 'Twice a day' ) as $k => $l ) : ?><option value="<?php echo esc_attr( $k ); ?>" <?php selected( $o['freq'], $k ); ?>><?php echo esc_html( $l ); ?></option><?php endforeach; ?>
+						<?php foreach ( array( 'off' => 'Off — only when I click Import now', 'weekly' => 'Weekly', 'awd_3days' => 'Every 3 days', 'daily' => 'Daily', 'twicedaily' => 'Twice a day' ) as $k => $l ) : ?><option value="<?php echo esc_attr( $k ); ?>" <?php selected( $o['freq'], $k ); ?>><?php echo esc_html( $l ); ?></option><?php endforeach; ?>
 					</select>
 					<?php if ( $next ) : ?><span class="description" style="margin-left:8px">Next run: <?php echo esc_html( wp_date( 'D j M, H:i', $next ) ); ?></span><?php endif; ?>
-					<p class="description" style="<?php echo $month > 100 ? 'color:#b32d2e;font-weight:600' : ''; ?>">
+					<p class="description" style="<?php echo $month > (int) $o['limit'] ? 'color:#b32d2e;font-weight:600' : ''; ?>">
 						Each run uses <strong><?php echo (int) $per_run; ?></strong> searches<?php echo $month ? ' — about <strong>' . (int) $month . '</strong> a month' : ''; ?>.
-						<?php echo $month > 100 ? 'That is more than the free 100 — use fewer keywords/cities or run weekly.' : ''; ?>
+						<?php echo $month > (int) $o['limit'] ? 'That is more than your monthly limit — the import will stop when the limit is reached.' : ''; ?>
 					</p>
+				</td></tr>
+				<tr><th><label for="gi-limit">Monthly search limit</label></th><td>
+					<input id="gi-limit" name="limit" type="number" min="1" value="<?php echo (int) $o['limit']; ?>" style="width:90px"> searches
+					<span class="description" style="margin-left:8px">Used this month: <strong><?php echo (int) awd_gi_used(); ?></strong> (counted from 1.7.5). Imports pause when the limit is reached.</span>
 				</td></tr>
 			</table>
 			<p>
@@ -649,3 +730,51 @@ add_action( 'init', function () {
 	awd_gi_cleanup();
 	delete_transient( 'awd_gi_fix_lock' );
 }, 31 );
+
+/* One-time (1.7.5): 200-search plan — every 3 days, a few more keywords. */
+add_action( 'init', function () {
+	if ( (int) get_option( 'awd_gi_fix_v' ) !== 2 || get_transient( 'awd_gi_fix_lock' ) ) {
+		return;
+	}
+	update_option( 'awd_gi_fix_v', 3, false );
+	$o          = awd_gi_get();
+	$o['limit'] = 200;
+	$kw         = awd_gi_lines( $o['keywords'] );
+	foreach ( array( 'sound bath', 'reiki', 'retreat', 'pilates', 'qigong' ) as $k ) {
+		if ( ! in_array( $k, $kw, true ) ) {
+			$kw[] = $k;
+		}
+	}
+	$o['keywords'] = implode( "\n", $kw );
+	$o['freq']     = 'awd_3days';
+	update_option( AWD_GI_OPT, $o, false );
+	wp_clear_scheduled_hook( AWD_GI_HOOK );
+	wp_schedule_event( time() + DAY_IN_SECONDS, 'awd_3days', AWD_GI_HOOK );
+}, 32 );
+
+/* One-time (1.7.6): Ireland + United Kingdom + United States, weekly. */
+add_action( 'init', function () {
+	if ( (int) get_option( 'awd_gi_fix_v' ) !== 3 || get_transient( 'awd_gi_fix_lock' ) ) {
+		return;
+	}
+	update_option( 'awd_gi_fix_v', 4, false );
+	$o            = awd_gi_get();
+	$o['country'] = "Ireland\nUnited Kingdom\nUnited States";
+	$o['cities']  = '';
+	$o['freq']    = 'weekly';
+	$o['max_new'] = max( 40, (int) $o['max_new'] );
+	update_option( AWD_GI_OPT, $o, false );
+	wp_clear_scheduled_hook( AWD_GI_HOOK );
+	wp_schedule_event( time() + DAY_IN_SECONDS, 'weekly', AWD_GI_HOOK );
+}, 33 );
+
+/* One-time (1.7.7): United States online only. */
+add_action( 'init', function () {
+	if ( (int) get_option( 'awd_gi_fix_v' ) !== 4 || get_transient( 'awd_gi_fix_lock' ) ) {
+		return;
+	}
+	update_option( 'awd_gi_fix_v', 5, false );
+	$o            = awd_gi_get();
+	$o['country'] = preg_replace( '/^United States\s*$/m', 'United States (online only)', $o['country'] );
+	update_option( AWD_GI_OPT, $o, false );
+}, 34 );
