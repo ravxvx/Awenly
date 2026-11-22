@@ -38,7 +38,7 @@ function awd_gi_get() {
 }
 
 function awd_gi_lines( $text ) {
-	return array_values( array_unique( array_filter( array_map( 'trim', preg_split( '/[\r\n,]+/', (string) $text ) ) ) ) );
+	return array_values( array_unique( array_filter( array_map( 'trim', preg_split( '/[\r\n]+/', (string) $text ) ) ) ) );
 }
 
 /** All "keyword in place" queries for one run. */
@@ -778,3 +778,25 @@ add_action( 'init', function () {
 	$o['country'] = preg_replace( '/^United States\s*$/m', 'United States (online only)', $o['country'] );
 	update_option( AWD_GI_OPT, $o, false );
 }, 34 );
+
+/* One-time (1.8.3): Google's events listings work per city, not per country — search cities. */
+add_action( 'init', function () {
+	if ( (int) get_option( 'awd_gi_fix_v' ) !== 5 || get_transient( 'awd_gi_fix_lock' ) ) {
+		return;
+	}
+	update_option( 'awd_gi_fix_v', 6, false );
+	$o             = awd_gi_get();
+	$o['country']  = "Dublin, Ireland\nCork, Ireland\nGalway, Ireland\nLondon, United Kingdom\nUnited States (online only)";
+	$o['cities']   = '';
+	$o['keywords'] = "yoga\nmeditation\nsound bath\nbreathwork\nreiki\nretreat\nmindfulness\nholistic";
+	$o['max_new']  = 80;
+	$o['freq']     = 'weekly';
+	update_option( AWD_GI_OPT, $o, false );
+	wp_clear_scheduled_hook( AWD_GI_HOOK );
+	wp_schedule_single_event( time() + 60, 'awd_gimport_once' );
+	wp_schedule_event( time() + WEEK_IN_SECONDS, 'weekly', AWD_GI_HOOK );
+}, 35 );
+add_action( 'awd_gimport_once', function () {
+	awd_gi_run( false );
+} );
+
