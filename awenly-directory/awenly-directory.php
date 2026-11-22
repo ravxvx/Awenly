@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Awenly Practitioner Directory
  * Description: Self-service practitioner listings for Awenly Circle, built into BuddyBoss: a "My Practice" profile tab, admin approval, a filterable directory and listing pages. Free listings.
- * Version:     1.6.1
+ * Version:     1.7.0
  * Author:      Awenly Circle
  * Requires at least: 6.2
  * Requires PHP: 7.4
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'AWD_VERSION', '1.6.1' );
+define( 'AWD_VERSION', '1.7.0' );
 define( 'AWD_FILE', __FILE__ );
 define( 'AWD_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AWD_URI', plugin_dir_url( __FILE__ ) );
@@ -34,6 +34,7 @@ require_once AWD_DIR . 'includes/about.php';
 require_once AWD_DIR . 'includes/rebrand.php';
 require_once AWD_DIR . 'includes/seo-fixes.php';
 require_once AWD_DIR . 'includes/blog-faq.php';
+require_once AWD_DIR . 'includes/import-google.php';
 
 register_activation_hook( __FILE__, function () {
 	awd_register_types();
