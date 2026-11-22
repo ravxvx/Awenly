@@ -63,7 +63,7 @@ function awd_gi_runs_per_month( $freq ) {
 function awd_gi_reschedule( $freq ) {
 	wp_clear_scheduled_hook( AWD_GI_HOOK );
 	if ( in_array( $freq, array( 'daily', 'twicedaily', 'weekly' ), true ) ) {
-		wp_schedule_event( time() + 300, $freq, AWD_GI_HOOK );
+		wp_schedule_event( time() + ( 'weekly' === $freq ? DAY_IN_SECONDS : HOUR_IN_SECONDS ), $freq, AWD_GI_HOOK );
 	}
 }
 add_action( AWD_GI_HOOK, function () {
@@ -170,6 +170,25 @@ function awd_gi_parse_when( $when, $start_date = '' ) {
 
 /* ---------- import ---------- */
 
+/** Words that make an event relevant to a wellbeing directory (stems). */
+function awd_gi_topic_words( $keywords ) {
+	$base = array( 'yoga', 'meditat', 'breath', 'sound bath', 'sound heal', 'sound journey', 'gong', 'reiki', 'heal', 'holistic', 'mindful', 'wellness', 'wellbeing', 'well-being', 'retreat', 'pilates', 'qigong', 'qi gong', 'tai chi', 'cacao', 'kirtan', 'chakra', 'spiritual', 'ecstatic dance', 'sauna', 'reflexolog', 'massage', 'ayurved', 'nidra', 'somatic', 'kundalini', 'crystal', 'energy', 'self-care', 'self care', 'stress', 'relax', 'womb', 'moon circle', 'women\'s circle', 'mens circle', 'men\'s circle', 'shaman', 'hypno', 'nutrition', 'forest bathing', 'cold water', 'wim hof' );
+	foreach ( awd_gi_lines( $keywords ) as $k ) {
+		$base[] = strtolower( rtrim( $k, 's' ) );
+	}
+	return array_unique( $base );
+}
+
+function awd_gi_relevant( $text, $words ) {
+	$text = strtolower( $text );
+	foreach ( $words as $w ) {
+		if ( strlen( $w ) > 2 && false !== strpos( $text, $w ) ) {
+			return true;
+		}
+	}
+	return false;
+}
+
 function awd_gi_key( $title, $date ) {
 	return md5( strtolower( preg_replace( '/[^a-z0-9]+/i', '', $title ) ) . '|' . $date );
 }
@@ -237,7 +256,14 @@ function awd_gi_link( $e ) {
 			return $t['link'];
 		}
 	}
-	return $e['link'] ?? ( $e['venue']['link'] ?? '' );
+	if ( ! empty( $e['link'] ) ) {
+		return $e['link'];
+	}
+	if ( ! empty( $e['event_location_map']['link'] ) && empty( $e['venue']['link'] ) ) {
+		return $e['event_location_map']['link'];
+	}
+	// Last resort: a Google search for the event, which shows Google's own event card with the organiser's links.
+	return 'https://www.google.com/search?q=' . rawurlencode( trim( ( $e['title'] ?? '' ) . ' ' . ( $e['venue']['name'] ?? ( $e['address'][0] ?? '' ) ) ) ) . '&ibp=htl;events';
 }
 
 /**
@@ -266,6 +292,7 @@ function awd_gi_run( $dry = false ) {
 		$queries = array_slice( $queries, 0, 1 );
 	}
 	$seen  = array();
+	$words = awd_gi_topic_words( $o['keywords'] );
 	$today = new DateTimeImmutable( 'today', wp_timezone() );
 	foreach ( $queries as $qq ) {
 		if ( ! $dry && $log['new'] >= (int) $o['max_new'] ) {
@@ -302,6 +329,8 @@ function awd_gi_run( $dry = false ) {
 				$why = 'in the past';
 			} elseif ( $is_ol && ! $o['online'] ) {
 				$why = 'online event';
+			} elseif ( ! awd_gi_relevant( $title . ' ' . ( $e['type'] ?? '' ) . ' ' . ( $e['description'] ?? '' ), $words ) ) {
+				$why = 'not a wellbeing event';
 			}
 			$date = $when ? $when['start']->format( 'Y-m-d' ) : '';
 			$key  = awd_gi_key( $title, $date );
@@ -345,6 +374,8 @@ function awd_gi_run( $dry = false ) {
 				continue;
 			}
 			update_post_meta( $id, '_awenly_event_location', $is_ol ? 'Online' . ( $addr ? ' · ' . $addr : '' ) : $addr );
+			update_post_meta( $id, '_EventURL', esc_url_raw( $item['link'] ) );
+			update_post_meta( $id, '_awd_import_raw', wp_slash( wp_json_encode( array_intersect_key( $e, array_flip( array( 'title', 'date', 'address', 'link', 'ticket_info', 'venue', 'type', 'description', 'price' ) ) ) ) ) );
 			update_post_meta( $id, '_awd_imported', 'google' );
 			update_post_meta( $id, '_awd_import_key', $key );
 			update_post_meta( $id, '_awd_import_query', $qq['q'] );
@@ -431,8 +462,11 @@ add_action( 'admin_post_awd_gimport', function () {
 	$o['cat']      = (int) ( $in['cat'] ?? 0 );
 	$o['online']   = empty( $in['online'] ) ? 0 : 1;
 	$o['images']   = empty( $in['images'] ) ? 0 : 1;
+	$prev_freq = awd_gi_get()['freq'];
 	update_option( AWD_GI_OPT, $o, false );
-	awd_gi_reschedule( $o['freq'] );
+	if ( $prev_freq !== $o['freq'] || ( 'off' !== $o['freq'] && ! wp_next_scheduled( AWD_GI_HOOK ) ) ) {
+		awd_gi_reschedule( $o['freq'] );
+	}
 	$msg = 'saved';
 	if ( ! empty( $in['do'] ) && in_array( $in['do'], array( 'test', 'run' ), true ) ) {
 		set_transient( 'awd_gi_result_' . get_current_user_id(), awd_gi_run( 'test' === $in['do'] ), 10 * MINUTE_IN_SECONDS );
@@ -549,3 +583,28 @@ add_action( 'post_submitbox_misc_actions', function ( $post ) {
 		echo '<div class="misc-pub-section">Imported from Google · <em>' . esc_html( get_post_meta( $post->ID, '_awd_import_query', true ) ) . '</em></div>';
 	}
 } );
+
+/* One-time: tidy events imported before the relevance filter and link fix (1.7.3). */
+add_action( 'init', function () {
+	if ( (int) get_option( 'awd_gi_fix_v' ) >= 1 || get_transient( 'awd_gi_fix_lock' ) || ! post_type_exists( 'tribe_events' ) ) {
+		return;
+	}
+	set_transient( 'awd_gi_fix_lock', 1, 5 * MINUTE_IN_SECONDS );
+	update_option( 'awd_gi_fix_v', 1, false );
+	$words = awd_gi_topic_words( awd_gi_get()['keywords'] );
+	$ids   = get_posts( array( 'post_type' => 'tribe_events', 'post_status' => array( 'publish', 'draft' ), 'fields' => 'ids', 'posts_per_page' => 200, 'meta_key' => '_awd_imported', 'meta_value' => 'google' ) );
+	foreach ( $ids as $id ) {
+		$p = get_post( $id );
+		if ( 'publish' === $p->post_status && ! awd_gi_relevant( $p->post_title, $words ) ) {
+			wp_update_post( array( 'ID' => $id, 'post_status' => 'draft' ) );
+		}
+		if ( ! get_post_meta( $id, '_EventURL', true ) ) {
+			$venue = '';
+			if ( preg_match( '/ at (.+?) on [A-Z][a-z]+day /', wp_strip_all_tags( $p->post_content ), $m ) ) {
+				$venue = $m[1];
+			}
+			update_post_meta( $id, '_EventURL', esc_url_raw( 'https://www.google.com/search?q=' . rawurlencode( trim( $p->post_title . ' ' . $venue ) ) . '&ibp=htl;events' ) );
+		}
+	}
+	delete_transient( 'awd_gi_fix_lock' );
+}, 30 );
