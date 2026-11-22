@@ -113,8 +113,23 @@ add_action( 'template_redirect', function () {
 	$go( 'sent' );
 }, 1 );
 
+function awd_is_contact_page() {
+	return is_page( array( 'contact-us', 'contact' ) );
+}
+
+add_filter( 'template_include', function ( $template ) {
+	return awd_is_contact_page() ? AWD_DIR . 'includes/template-contact.php' : $template;
+}, 100 );
+
+add_filter( 'body_class', function ( $c ) {
+	if ( awd_is_contact_page() ) {
+		$c[] = 'awd-page';
+	}
+	return $c;
+} );
+
 add_action( 'wp_enqueue_scripts', function () {
-	if ( is_page( array( 'contact-us', 'contact' ) ) ) {
+	if ( awd_is_contact_page() ) {
 		wp_enqueue_style( 'awenly-directory', AWD_URI . 'assets/directory.css', array(), AWD_VERSION );
 	}
 }, 10002 );

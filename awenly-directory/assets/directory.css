@@ -415,3 +415,29 @@ body.bb-buddypanel .awd-single, body.bb-buddypanel .awd-directory { width: auto 
 .awd-contact--site select { height: auto !important; min-height: 48px; line-height: 1.4 !important; padding-top: 10px !important; padding-bottom: 10px !important; }
 body.page-id-438 .elementor-heading-title { font-family: "Poppins", system-ui, sans-serif !important; color: #2b1356 !important; font-weight: 700 !important; letter-spacing: -.02em; }
 body.page-id-438 .elementor-widget-text-editor { font-family: "Poppins", system-ui, sans-serif !important; color: #4e4766 !important; }
+/* Contact page */
+.awd-contact-hero { padding-bottom: 90px; }
+.awd-contact-grid { display: grid; grid-template-columns: 340px 1fr; gap: 28px; margin-top: -60px; padding-bottom: 70px; align-items: start; position: relative; z-index: 2; }
+.awd-contact-side { display: grid; gap: 14px; }
+.awd-contact-card { display: flex; gap: 14px; padding: 20px; background: #fff; border: 1px solid var(--awd-line); border-radius: 18px; box-shadow: var(--awd-shadow); text-decoration: none !important; color: var(--awd-text) !important; transition: transform .2s, box-shadow .2s, border-color .2s; }
+.awd-contact-card:hover { transform: translateY(-2px); box-shadow: var(--awd-shadow-lg); border-color: #cdbcf8; }
+.awd-contact-card__icon { flex: none; width: 44px; height: 44px; border-radius: 12px; background: var(--awd-soft); color: var(--awd-purple); display: flex; align-items: center; justify-content: center; }
+.awd-contact-card__icon .awd-icon { width: 22px; height: 22px; }
+.awd-contact-card__body { display: flex; flex-direction: column; gap: 3px; }
+.awd-contact-card__body strong { color: var(--awd-ink); font-size: 16px; }
+.awd-contact-card__body small { font-size: 14px; line-height: 1.45; }
+.awd-contact-card__body em { font-style: normal; font-weight: 600; font-size: 14px; color: var(--awd-purple); margin-top: 4px; }
+.awd-contact-note { display: flex; gap: 12px; padding: 18px 20px; border-radius: 18px; background: linear-gradient(135deg, #3b1d8f, #6d3fe0); color: #e9e2ff; }
+.awd-contact-note .awd-icon { flex: none; width: 22px; height: 22px; color: #c6f24e; margin-top: 2px; }
+.awd-contact-note p { margin: 0; font-size: 14px; line-height: 1.5; }
+.awd-contact-note strong { display: block; color: #fff; font-size: 15px; }
+.awd-contact-main { background: #fff; border: 1px solid var(--awd-line); border-radius: 24px; box-shadow: var(--awd-shadow-lg); padding: 34px 36px; }
+.awd-contact-main h2 { margin: 0 0 4px; font-size: 26px; color: var(--awd-ink); font-weight: 700; }
+.awd-contact-main > .awd-muted { margin: 0 0 20px; font-size: 14px; }
+.awd-contact-main .awd-contact--site { padding: 0 !important; border: 0 !important; box-shadow: none !important; background: none !important; }
+.awd-contact-main .awd-btn { min-width: 200px; padding: 15px 28px; }
+@media (max-width: 900px) {
+	.awd-contact-grid { grid-template-columns: 1fr; margin-top: -50px; }
+	.awd-contact-main { order: -1; padding: 24px 20px; }
+	.awd-contact-main .awd-btn { width: 100%; }
+}
