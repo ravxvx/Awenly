@@ -23,6 +23,7 @@ function awd_gi_defaults() {
 		'cities'   => '',
 		'status'   => 'publish',
 		'autodel'  => 1,
+		'limit'    => 200,
 		'freq'     => 'off',
 		'max_new'  => 20,
 		'cat'      => 0,
@@ -56,15 +57,29 @@ function awd_gi_queries( $o ) {
 }
 
 function awd_gi_runs_per_month( $freq ) {
-	return array( 'daily' => 30, 'twicedaily' => 60, 'weekly' => 4 )[ $freq ] ?? 0;
+	return array( 'daily' => 30, 'twicedaily' => 60, 'weekly' => 4, 'awd_3days' => 10 )[ $freq ] ?? 0;
+}
+
+add_filter( 'cron_schedules', function ( $s ) {
+	$s['awd_3days'] = array( 'interval' => 3 * DAY_IN_SECONDS, 'display' => 'Every 3 days' );
+	return $s;
+} );
+
+/** Searches used this calendar month (counted by the plugin, including tests). */
+function awd_gi_used() {
+	$u = get_option( 'awd_gi_used', array() );
+	return ( $u['month'] ?? '' ) === gmdate( 'Y-m' ) ? (int) $u['n'] : 0;
+}
+function awd_gi_count( $n ) {
+	update_option( 'awd_gi_used', array( 'month' => gmdate( 'Y-m' ), 'n' => awd_gi_used() + (int) $n ), false );
 }
 
 /* ---------- schedule ---------- */
 
 function awd_gi_reschedule( $freq ) {
 	wp_clear_scheduled_hook( AWD_GI_HOOK );
-	if ( in_array( $freq, array( 'daily', 'twicedaily', 'weekly' ), true ) ) {
-		wp_schedule_event( time() + ( 'weekly' === $freq ? DAY_IN_SECONDS : HOUR_IN_SECONDS ), $freq, AWD_GI_HOOK );
+	if ( in_array( $freq, array( 'daily', 'twicedaily', 'weekly', 'awd_3days' ), true ) ) {
+		wp_schedule_event( time() + ( in_array( $freq, array( 'weekly', 'awd_3days' ), true ) ? DAY_IN_SECONDS : HOUR_IN_SECONDS ), $freq, AWD_GI_HOOK );
 	}
 }
 add_action( AWD_GI_HOOK, function () {
@@ -299,9 +314,14 @@ function awd_gi_run( $dry = false ) {
 		if ( ! $dry && $log['new'] >= (int) $o['max_new'] ) {
 			break;
 		}
+		if ( awd_gi_used() >= (int) $o['limit'] ) {
+			$log['errors'][] = 'Monthly search limit (' . (int) $o['limit'] . ') reached — the import continues next month.';
+			break;
+		}
 		$dbg = array();
 		$res = awd_gi_search( $o['key'], $qq['q'], $qq['place'], $dbg );
 		$log['searches'] += count( $dbg );
+		awd_gi_count( count( $dbg ) );
 		if ( $dry ) {
 			$log['debug'] = array_merge( $log['debug'] ?? array(), array_map( function ( $d ) use ( $qq ) {
 				return '"' . $qq['q'] . '" ' . $d;
@@ -459,7 +479,8 @@ add_action( 'admin_post_awd_gimport', function () {
 	$o['country']  = sanitize_text_field( $in['country'] ?? '' );
 	$o['cities']   = implode( "\n", array_slice( awd_gi_lines( sanitize_textarea_field( $in['cities'] ?? '' ) ), 0, 20 ) );
 	$o['status']   = 'publish' === ( $in['status'] ?? '' ) ? 'publish' : 'draft';
-	$o['freq']     = in_array( $in['freq'] ?? '', array( 'off', 'daily', 'twicedaily', 'weekly' ), true ) ? $in['freq'] : 'off';
+	$o['freq']     = in_array( $in['freq'] ?? '', array( 'off', 'daily', 'twicedaily', 'weekly', 'awd_3days' ), true ) ? $in['freq'] : 'off';
+	$o['limit']    = max( 1, min( 100000, (int) ( $in['limit'] ?? 200 ) ) );
 	$o['max_new']  = max( 1, min( 100, (int) ( $in['max_new'] ?? 20 ) ) );
 	$o['cat']      = (int) ( $in['cat'] ?? 0 );
 	$o['online']   = empty( $in['online'] ) ? 0 : 1;
@@ -494,7 +515,7 @@ function awd_gi_page() {
 	?>
 	<div class="wrap">
 		<h1>Import events from Google</h1>
-		<p style="max-width:780px">Searches Google's events listings for each <strong>keyword</strong> in your <strong>country</strong> (or each city), and adds new upcoming events to the calendar with a short summary and a <em>Book / more info</em> link to the organiser. Events already on the site, past events and duplicates are skipped. Uses <a href="https://serpapi.com/google-events-api" target="_blank" rel="noopener">SerpApi</a> — the free plan includes 100 searches a month.</p>
+		<p style="max-width:780px">Searches Google's events listings for each <strong>keyword</strong> in your <strong>country</strong> (or each city), and adds new upcoming events to the calendar with a short summary and a <em>Book / more info</em> link to the organiser. Events already on the site, past events and duplicates are skipped. Uses <a href="https://serpapi.com/google-events-api" target="_blank" rel="noopener">SerpApi</a> — check your plan's monthly searches and set the limit below.</p>
 		<?php if ( 'saved' === $msg ) : ?><div class="notice notice-success is-dismissible"><p>Settings saved.</p></div><?php endif; ?>
 		<?php if ( $waiting ) : ?>
 			<div class="notice notice-info"><p><strong><?php echo (int) $waiting; ?></strong> imported events are waiting as drafts. <a href="<?php echo esc_url( admin_url( 'edit.php?post_type=tribe_events&post_status=draft' ) ); ?>">Review and publish them</a>.</p></div>
@@ -553,13 +574,17 @@ function awd_gi_page() {
 				</td></tr>
 				<tr><th><label for="gi-freq">Run automatically</label></th><td>
 					<select id="gi-freq" name="freq">
-						<?php foreach ( array( 'off' => 'Off — only when I click Import now', 'weekly' => 'Weekly', 'daily' => 'Daily', 'twicedaily' => 'Twice a day' ) as $k => $l ) : ?><option value="<?php echo esc_attr( $k ); ?>" <?php selected( $o['freq'], $k ); ?>><?php echo esc_html( $l ); ?></option><?php endforeach; ?>
+						<?php foreach ( array( 'off' => 'Off — only when I click Import now', 'weekly' => 'Weekly', 'awd_3days' => 'Every 3 days', 'daily' => 'Daily', 'twicedaily' => 'Twice a day' ) as $k => $l ) : ?><option value="<?php echo esc_attr( $k ); ?>" <?php selected( $o['freq'], $k ); ?>><?php echo esc_html( $l ); ?></option><?php endforeach; ?>
 					</select>
 					<?php if ( $next ) : ?><span class="description" style="margin-left:8px">Next run: <?php echo esc_html( wp_date( 'D j M, H:i', $next ) ); ?></span><?php endif; ?>
-					<p class="description" style="<?php echo $month > 100 ? 'color:#b32d2e;font-weight:600' : ''; ?>">
+					<p class="description" style="<?php echo $month > (int) $o['limit'] ? 'color:#b32d2e;font-weight:600' : ''; ?>">
 						Each run uses <strong><?php echo (int) $per_run; ?></strong> searches<?php echo $month ? ' — about <strong>' . (int) $month . '</strong> a month' : ''; ?>.
-						<?php echo $month > 100 ? 'That is more than the free 100 — use fewer keywords/cities or run weekly.' : ''; ?>
+						<?php echo $month > (int) $o['limit'] ? 'That is more than your monthly limit — the import will stop when the limit is reached.' : ''; ?>
 					</p>
+				</td></tr>
+				<tr><th><label for="gi-limit">Monthly search limit</label></th><td>
+					<input id="gi-limit" name="limit" type="number" min="1" value="<?php echo (int) $o['limit']; ?>" style="width:90px"> searches
+					<span class="description" style="margin-left:8px">Used this month: <strong><?php echo (int) awd_gi_used(); ?></strong> (counted from 1.7.5). Imports pause when the limit is reached.</span>
 				</td></tr>
 			</table>
 			<p>
@@ -649,3 +674,24 @@ add_action( 'init', function () {
 	awd_gi_cleanup();
 	delete_transient( 'awd_gi_fix_lock' );
 }, 31 );
+
+/* One-time (1.7.5): 200-search plan — every 3 days, a few more keywords. */
+add_action( 'init', function () {
+	if ( (int) get_option( 'awd_gi_fix_v' ) !== 2 || get_transient( 'awd_gi_fix_lock' ) ) {
+		return;
+	}
+	update_option( 'awd_gi_fix_v', 3, false );
+	$o          = awd_gi_get();
+	$o['limit'] = 200;
+	$kw         = awd_gi_lines( $o['keywords'] );
+	foreach ( array( 'sound bath', 'reiki', 'retreat', 'pilates', 'qigong' ) as $k ) {
+		if ( ! in_array( $k, $kw, true ) ) {
+			$kw[] = $k;
+		}
+	}
+	$o['keywords'] = implode( "\n", $kw );
+	$o['freq']     = 'awd_3days';
+	update_option( AWD_GI_OPT, $o, false );
+	wp_clear_scheduled_hook( AWD_GI_HOOK );
+	wp_schedule_event( time() + DAY_IN_SECONDS, 'awd_3days', AWD_GI_HOOK );
+}, 32 );
