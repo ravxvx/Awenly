@@ -379,3 +379,18 @@ add_filter( 'body_class', function ( $c ) {
 	}
 	return $c;
 } );
+
+/* Single event page in the Awenly design. */
+add_filter( 'template_include', function ( $template ) {
+	if ( is_singular( 'tribe_events' ) && function_exists( 'tribe_get_start_date' ) && ! post_password_required() ) {
+		return AWD_DIR . 'includes/template-event.php';
+	}
+	return $template;
+}, 200 );
+
+add_filter( 'body_class', function ( $c ) {
+	if ( is_singular( 'tribe_events' ) ) {
+		$c[] = 'awd-page';
+	}
+	return $c;
+} );
