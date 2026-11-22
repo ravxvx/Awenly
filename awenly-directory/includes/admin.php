@@ -16,9 +16,9 @@ add_action( 'transition_post_status', function ( $new, $old, $post ) {
 		$author = get_userdata( (int) $post->post_author );
 		wp_mail(
 			get_option( 'admin_email' ),
-			sprintf( '[%s] New practitioner listing to review: %s', wp_specialchars_decode( get_bloginfo( 'name' ) ), $post->post_title ),
+			sprintf( '[%s] New directory listing to review: %s', wp_specialchars_decode( get_bloginfo( 'name' ) ), $post->post_title ),
 			sprintf(
-				"A new practitioner listing is waiting for approval.\n\nName: %s\nSubmitted by: %s (%s)\n\nReview and publish it here:\n%s\n",
+				"A new directory listing is waiting for approval.\n\nName: %s\nSubmitted by: %s (%s)\n\nReview and publish it here:\n%s\n",
 				$post->post_title,
 				$author ? $author->display_name : '-',
 				$author ? $author->user_email : '-',
@@ -31,14 +31,14 @@ add_action( 'transition_post_status', function ( $new, $old, $post ) {
 	if ( 'publish' === $new && ! get_post_meta( $post->ID, '_awd_approved', true ) ) {
 		update_post_meta( $post->ID, '_awd_approved', time() );
 		$uid = (int) $post->post_author;
-		if ( $uid && function_exists( 'bp_set_member_type' ) && function_exists( 'bp_get_member_type_object' ) && bp_get_member_type_object( 'practitioner' ) ) {
+		if ( $uid && 'practitioner' === awd_type( $post ) && function_exists( 'bp_set_member_type' ) && function_exists( 'bp_get_member_type_object' ) && bp_get_member_type_object( 'practitioner' ) ) {
 			bp_set_member_type( $uid, 'practitioner', true );
 		}
 		$author = get_userdata( $uid );
 		if ( $author && ! user_can( $author, 'manage_options' ) ) {
 			wp_mail(
 				$author->user_email,
-				sprintf( '[%s] Your practitioner listing is live', wp_specialchars_decode( get_bloginfo( 'name' ) ) ),
+				sprintf( '[%s] Your listing is live', wp_specialchars_decode( get_bloginfo( 'name' ) ) ),
 				sprintf(
 					"Hi %s,\n\nGood news — your listing \"%s\" is now live in the Awenly Circle practitioner directory:\n%s\n\nYou can update it any time from the \"My Practice\" tab on your profile.\n\nWelcome to the circle!\n",
 					$author->display_name,
