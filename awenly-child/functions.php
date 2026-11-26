@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'AWENLY_CHILD_VERSION', '3.3.3' );
+define( 'AWENLY_CHILD_VERSION', '3.3.4' );
 define( 'AWENLY_CHILD_DIR', get_stylesheet_directory() );
 define( 'AWENLY_CHILD_URI', get_stylesheet_directory_uri() );
 

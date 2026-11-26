@@ -250,7 +250,9 @@ body.awenly-home { overflow-x: hidden; }
 .awenly-footer__col a:not(.aw3-btn) { display: block; color: #cfc4e8 !important; text-decoration: none !important; padding: 5px 0; transition: color .2s; }
 .awenly-footer__col a:not(.aw3-btn):hover { color: var(--aw-lime) !important; }
 .awenly-footer__cta p { margin: 0 0 18px; line-height: 1.6; color: #cfc4e8; }
-.awenly-footer__bottom { display: flex; justify-content: space-between; gap: 16px; padding-top: 20px; padding-bottom: 24px; border-top: 1px solid rgba(255, 255, 255, .1); font-size: 13px; color: #9d91bd; }
+.awenly-footer__credit a { color: #c9f04a; font-weight: 600; text-decoration: none; }
+.awenly-footer__credit a:hover { text-decoration: underline; }
+.awenly-footer__bottom { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; padding-top: 20px; padding-bottom: 24px; border-top: 1px solid rgba(255, 255, 255, .1); font-size: 13px; color: #9d91bd; }
 
 /* ---------- Motion ---------- */
 .aw-js .aw-reveal { opacity: 0; transform: translateY(24px); transition: opacity .8s var(--aw-ease), transform .8s var(--aw-ease); }

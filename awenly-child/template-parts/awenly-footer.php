@@ -45,5 +45,6 @@ $dir_url  = awenly_opt( 'practitioners_url' );
 	<div class="awenly-wrap awenly-footer__bottom">
 		<span>© <?php echo esc_html( wp_date( 'Y' ) ); ?> Awenly Circle</span>
 		<span><?php esc_html_e( 'Connect • Learn • Heal • Grow', 'awenly-child' ); ?></span>
+		<span class="awenly-footer__credit"><?php esc_html_e( 'Website by', 'awenly-child' ); ?> <a href="https://smartsite.ie/" target="_blank" rel="noopener">SmartSite.ie</a></span>
 	</div>
 </footer>
