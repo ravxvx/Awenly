@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'AWENLY_CHILD_VERSION', '3.3.6' );
+define( 'AWENLY_CHILD_VERSION', '3.3.8' );
 define( 'AWENLY_CHILD_DIR', get_stylesheet_directory() );
 define( 'AWENLY_CHILD_URI', get_stylesheet_directory_uri() );
 
@@ -14,6 +14,7 @@ require_once AWENLY_CHILD_DIR . '/inc/helpers.php';
 require_once AWENLY_CHILD_DIR . '/inc/customizer.php';
 require_once AWENLY_CHILD_DIR . '/inc/events.php';
 require_once AWENLY_CHILD_DIR . '/inc/art.php';
+require_once AWENLY_CHILD_DIR . '/inc/activity-banner.php';
 
 /**
  * Styles: parent first, then Awenly on top (late priority so we win over BuddyBoss).
