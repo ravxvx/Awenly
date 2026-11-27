@@ -28,6 +28,7 @@ $dir_url  = awenly_opt( 'practitioners_url' );
 			<a href="<?php echo esc_url( $dir_url ); ?>"><?php esc_html_e( 'Practitioners', 'awenly-child' ); ?></a>
 			<a href="<?php echo esc_url( awenly_opt( 'events_url' ) ); ?>"><?php esc_html_e( 'Events', 'awenly-child' ); ?></a>
 			<a href="<?php echo esc_url( awenly_opt( 'courses_url' ) ); ?>"><?php esc_html_e( 'Learn', 'awenly-child' ); ?></a>
+			<a href="<?php echo esc_url( home_url( '/blog/' ) ); ?>"><?php esc_html_e( 'Blog', 'awenly-child' ); ?></a>
 		</nav>
 		<nav class="awenly-footer__col" aria-label="<?php esc_attr_e( 'Circle', 'awenly-child' ); ?>">
 			<h3><?php esc_html_e( 'Circle', 'awenly-child' ); ?></h3>
